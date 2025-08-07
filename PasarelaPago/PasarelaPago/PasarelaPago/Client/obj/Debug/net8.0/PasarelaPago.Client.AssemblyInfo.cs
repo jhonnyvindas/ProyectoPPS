@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PasarelaPago.Client")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+89c8b402b2941664b65b2dc766ed4b4707599a63")]
 [assembly: System.Reflection.AssemblyProductAttribute("PasarelaPago.Client")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PasarelaPago.Client")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

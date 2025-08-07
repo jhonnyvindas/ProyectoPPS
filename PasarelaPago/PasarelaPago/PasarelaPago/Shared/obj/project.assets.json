@@ -8,23 +8,23 @@
     "net8.0": []
   },
   "packageFolders": {
-    "C:\\Users\\Simon\\.nuget\\packages\\": {},
+    "C:\\Users\\User\\.nuget\\packages\\": {},
     "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages": {}
   },
   "project": {
     "version": "1.0.0",
     "restore": {
-      "projectUniqueName": "C:\\Users\\Simon\\source\\repos\\PasarelaPago\\PasarelaPago\\Shared\\PasarelaPago.Shared.csproj",
+      "projectUniqueName": "C:\\Users\\User\\Documents\\GitHub\\ProyectoPPS\\PasarelaPago\\PasarelaPago\\PasarelaPago\\Shared\\PasarelaPago.Shared.csproj",
       "projectName": "PasarelaPago.Shared",
-      "projectPath": "C:\\Users\\Simon\\source\\repos\\PasarelaPago\\PasarelaPago\\Shared\\PasarelaPago.Shared.csproj",
-      "packagesPath": "C:\\Users\\Simon\\.nuget\\packages\\",
-      "outputPath": "C:\\Users\\Simon\\source\\repos\\PasarelaPago\\PasarelaPago\\Shared\\obj\\",
+      "projectPath": "C:\\Users\\User\\Documents\\GitHub\\ProyectoPPS\\PasarelaPago\\PasarelaPago\\PasarelaPago\\Shared\\PasarelaPago.Shared.csproj",
+      "packagesPath": "C:\\Users\\User\\.nuget\\packages\\",
+      "outputPath": "C:\\Users\\User\\Documents\\GitHub\\ProyectoPPS\\PasarelaPago\\PasarelaPago\\PasarelaPago\\Shared\\obj\\",
       "projectStyle": "PackageReference",
       "fallbackFolders": [
         "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
       ],
       "configFilePaths": [
-        "C:\\Users\\Simon\\AppData\\Roaming\\NuGet\\NuGet.Config",
+        "C:\\Users\\User\\AppData\\Roaming\\NuGet\\NuGet.Config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
         "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
       ],
@@ -72,7 +72,7 @@
             "privateAssets": "all"
           }
         },
-        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.300/PortableRuntimeIdentifierGraph.json"
+        "runtimeIdentifierGraphPath": "C:\\Program Files\\dotnet\\sdk\\9.0.302/PortableRuntimeIdentifierGraph.json"
       }
     }
   }

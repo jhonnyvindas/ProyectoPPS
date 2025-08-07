@@ -1,0 +1,44 @@
+﻿@page "/Transacciones"
+@using PasarelaPago.Shared.Models
+@inject HttpClient Http
+
+
+@code {
+    private List<Transaccion> transacciones;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            transacciones = await Http.GetFromJsonAsync<List<Transaccion>>("api/transacciones");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine("Error al obtener transacciones: " + ex.Message);
+            transacciones = new(); 
+        }
+    }
+}
+
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Monto</th>
+            <th>Moneda</th>
+            <th>Estado</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var t in transacciones)
+        {
+            <tr>
+                <td>@t.id</td>
+                <td>@t.monto</td>
+                <td>@t.moneda</td>
+                <td>@t.respuesta</td>  @t.tipoTransaccion 
+            </tr>
+        }
+    </tbody>
+</table>

@@ -1,9 +1,16 @@
 using Microsoft.AspNetCore.ResponseCompression;
+using PasarelaPago.Shared.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddRazorPages();
+builder.Services.AddHttpClient<TilopayService>();
+builder.Services.Configure<ConfiguracionTilopay>(
+    builder.Configuration.GetSection("Tilopay"));
+
+builder.Services.AddScoped<TilopayService>();
+
 
 var app = builder.Build();
 
