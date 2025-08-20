@@ -1,191 +1,320 @@
 ﻿@page "/pagos/tilopay"
-@inject PasarelaPago.Client.Services.TilopayApi Api
-@inject IJSRuntime JS
-@inject NavigationManager Nav
 
-<h3>Pago con Tilopay (SDK)</h3>
+<div class="pago-container">
 
-<div class="payFormTilopay">
-    <div class="row">
-        <label for="method">Payment Method</label>
-        <select id="tlpy_payment_method" name="tlpy_payment_method">
+    <h3 class="tilo-title">Pago de servicios de Synergia</h3>
+
+    <!-- MÉTODO DE PAGO -->
+    <h4 class="section-title">Elegir método de pago</h4>
+    <div class="box">
+        <select id="tlpy_payment_method" name="tlpy_payment_method" class="w-100">
             <option value="12:3:88802749:payfac:0:" selected>Tarjeta</option>
         </select>
     </div>
 
-    <div class="row">
-        <label for="ccnumber">Card Number</label>
-        <input type="text" id="tlpy_cc_number" name="tlpy_cc_number" inputmode="numeric" value="4012000000020089" />
+    <!-- DATOS DE LA TARJETA -->
+    <h4 class="section-title">Datos de la tarjeta</h4>
+    <div class="box card-form">
+        <input type="text" id="tlpy_cc_number" name="tlpy_cc_number"
+               placeholder="1234 5678 9012 3456" inputmode="numeric" autocomplete="cc-number"
+               maxlength="19" 
+        pattern="\d{4} \d{4} \d{4} \d{4}"
+        title="Ingrese 16 dígitos en el formato 1234 5678 9012 3456"
+        oninput="this.value=this.value
+        .replace(/\D/g,'')      
+        .slice(0,16)
+        .replace(/(\d{4})(?=\d)/g,'$1 ') 
+        .trim();">
+        <div class="card-row">
+            <input type="text"
+                   id="tlpy_cc_expiration_date"
+                   name="tlpy_cc_expiration_date"
+                   placeholder="MM/YY"
+                   inputmode="numeric"
+                   autocomplete="cc-exp"
+                   maxlength="5"                                  
+            pattern="^(0[1-9]|1[0-2])\/\d{2}$"
+            title="Formato MM/YY. Mes entre 01 y 12"
+            oninput="formatAndValidateExpiry(this)"
+            onblur="formatAndValidateExpiry(this, true)" />
+
+                   
+            <input type="text" id="tlpy_cvv" name="tlpy_cvv"
+                   placeholder="CVV" inputmode="numeric" autocomplete="off"
+                   maxlength="3"
+                   minlength="3"
+                   pattern="[0-9]{3}"
+                   title="Debe ingresar exactamente 3 dígitos"
+                   oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,3)" />
+        </div>
     </div>
 
-    <div class="row">
-        <label for="expdate">Card Expire (MM/YY)</label>
-        <input type="text" id="tlpy_cc_expiration_date" name="tlpy_cc_expiration_date" placeholder="MM/YY" value="12/26" />
+    <!-- DATOS DEL PROPIETARIO -->
+    <h4 class="section-title">Datos del propietario</h4>
+    <div class="box owner-form">
+        <div class="two-cols">
+            <input type="text" id="billToFirstName" name="billToFirstName" placeholder="Nombre" />
+            <input type="text" id="billToLastName" name="billToLastName" placeholder="Apellido" />
+        </div>
+        <input type="text" id="customerId" name="customerId" placeholder="Cédula" />
+        <input type="text" id="billToTelephone" name="billToTelephone" placeholder="Teléfono" inputmode="numeric" />
+        <input type="text" id="billToEmail" name="billToEmail" placeholder="Correo electrónico" />
     </div>
 
-    <div class="row">
-        <label for="cvv">CVV</label>
-        <input type="text" id="tlpy_cvv" name="ctlpy_cvvv" inputmode="numeric" value="123" />
+    <!-- MONTO A CANCELAR -->
+    <div class="amount-row">
+        <h4 class="section-title">Monto a cancelar</h4>
+        <strong>@PayLabel</strong>
     </div>
 
-
+    <!-- INPUTS OCULTOS TILOPAY -->
     <input type="hidden" id="orderNumber" name="orderNumber" value="@OrderNumber" />
     <input type="hidden" id="amount" name="amount" value="@AmountString" />
     <input type="hidden" id="currency" name="currency" value="@Currency" />
     <input type="hidden" id="redirect" name="redirect" value="@RedirectUrl" />
 
-    <input type="hidden" id="billToEmail" name="billToEmail" value="demo@example.com" />
-    <input type="hidden" id="billToFirstName" name="billToFirstName" value="Demo" />
-    <input type="hidden" id="billToLastName" name="billToLastName" value="User" />
     <input type="hidden" id="billToAddress" name="billToAddress" value="123 Main Street" />
     <input type="hidden" id="billToCity" name="billToCity" value="San José" />
     <input type="hidden" id="billToCountry" name="billToCountry" value="CR" />
     <input type="hidden" id="billToState" name="billToState" value="SJ" />
     <input type="hidden" id="billToZipPostCode" name="billToZipPostCode" value="10101" />
-    <input type="hidden" id="billToTelephone" name="billToTelephone" value="88888888" />
+
+    <div id="responseTilopay"></div>
+
+    <!-- ACCIONES -->
+    <div class="actions">
+        <button type="button" class="btn btn-primary" @onclick="Pagar" disabled="@Pagando">
+            @(Pagando ? "Procesando…" : "Pagar")
+        </button>
+    </div>
+
+    <div id="result"></div>
+
+    @if (!string.IsNullOrWhiteSpace(Estado))
+    {
+        <div class="status">@Estado</div>
+    }
 </div>
-<div id="responseTilopay"></div>
-<div class="row" style="margin-top:12px">
-    <button type="button" @onclick="Pagar" disabled="@Pagando">
-        @(Pagando ? "Procesando…" : "Pagar")
-    </button>
-</div>
 
-<div id="result"></div>
-
-
-@if (!string.IsNullOrWhiteSpace(Estado))
-{
-    <div style="margin-top:10px;border:1px solid #ddd;padding:8px">@Estado</div>
-}
-
-@code {
-    private string? Estado;
-    private bool Pagando;
-    private DotNetObjectReference<PagoTilopay>? _selfRef;
-
-    private string OrderNumber { get; set; } = Guid.NewGuid().ToString("N");
-    private decimal Amount { get; set; } = 1.00m;
-    private string AmountString => Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
-    private string Currency { get; set; } = "USD";
-    private string RedirectUrl => BuildRedirectUrl("/pagos/resultado");
-
-    protected override void OnInitialized()
-    {
-        _selfRef = DotNetObjectReference.Create(this);
+<style>
+    :root {
+        /* Celeste oscuro de marca */
+        --brand-blue: #0C7BD9;
     }
 
-
-    public async ValueTask DisposeAsync()
-    {
-        _selfRef?.Dispose();
-        await Task.CompletedTask;
+    /* Layout general */
+    .pago-container {
+        max-width: 640px;
+        margin: 24px auto;
+        padding: 0 16px;
     }
 
-    private string BuildRedirectUrl(string path)
-    {
-      
-        var uri = new Uri(Nav.Uri);
-        var scheme = "https"; 
-        var host = uri.Host;
-        var port = uri.IsDefaultPort ? "" : $":{uri.Port}";
-        return $"{scheme}://{host}{port}{path}";
+    /* Título principal */
+    .tilo-title {
+        margin: 0 0 16px;
+        text-align: center;
+        font-weight: 800;
+        font-size: 1.75rem; /* más grande */
+        color: var(--brand-blue); /* celeste oscuro */
     }
 
-    private async Task Pagar()
-    {
-        if (Pagando) return;
-        Pagando = true;
+    .section-title {
+        margin: 18px 0 8px;
+        font-weight: 300;
+        font-size: 1rem;
+        color: #374151;
+    }
 
-        try
-        {
-            Estado = "Obteniendo token…";
-            StateHasChanged();
+    .box {
+        background: #fff;
+        border: 1px solid #E5E7EB;
+        border-radius: 12px;
+        padding: 12px;
+    }
 
-            // 1) Token desde tu API (Server -> Tilopay /login)
-            var token = await Api.GetSdkTokenAsync();
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                Estado = "No se obtuvo token del servidor.";
-                return;
+        .card-form input, .owner-form input, .box select {
+            width: 100%;
+            height: 44px;
+            border: 1px solid #D1D5DB;
+            border-radius: 10px;
+            padding: 0 12px;
+            font-size: .95rem;
+            background: #fff;
+            outline: none;
+            transition: border-color .15s, box-shadow .15s;
+        }
+
+            .card-form input::placeholder, .owner-form input::placeholder {
+                color: #9CA3AF;
             }
 
-            // 2) Inicializar el SDK con los parámetros requeridos
-            Estado = "Inicializando SDK…";
-            StateHasChanged();
+            .card-form input:focus, .owner-form input:focus, .box select:focus {
+                border-color: var(--brand-blue);
+                box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-blue) 25%, transparent);
+            }
 
-            
-            OrderNumber = Guid.NewGuid().ToString("N");
-            StateHasChanged(); 
-
-            await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, new
-            {
-                orderNumber = OrderNumber,
-                amount = AmountString,
-                currency = Currency,
-                description = "Compra de prueba",
-                language = "es",
-                capture = "1",
-                redirect = RedirectUrl,
-                billToEmail = "demo@example.com",
-                billToFirstName = "Demo",
-                billToLastName = "User",
-                billToAddress = "123 Main Street",
-                billToCity = "San José",
-                billToCountry = "CR",
-                billToState = "SJ",
-                billToZipPostCode = "10101",
-                billToTelephone = "88888888",
-                subscription = 0,
-                hashVersion = "V2"
-            }, _selfRef);
-
-
-            // 3) Validar datos
-            Estado = "Validando datos…";
-            StateHasChanged();
-
-            // 4) Disparar el pago (startPayment)
-            Estado = "Invocando checkout…";
-            StateHasChanged();
-
-            await JS.InvokeVoidAsync("tilopayInterop.prepareAndPay");
-
-            Estado = "Esperando confirmación del banco…";
-        }
-        catch (JSException jse)
-        {
-            Estado = $"Error JS/SDK: {jse.Message}";
-        }
-        catch (Exception ex)
-        {
-            Estado = $"Error: {ex.Message}";
-        }
-        finally
-        {
-            Pagando = false;
-        }
+    .card-row {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-top: 10px;
     }
 
-    [JSInvokable]
-    public Task OnPaymentEvent(PaymentEvent evt)
-    {
+    .two-cols {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 10px;
+        margin-bottom: 10px;
+    }
 
-        var status = (evt?.status ?? "").ToLowerInvariant();
-        Estado = status switch
+    .owner-form input {
+        margin-top: 10px;
+    }
+
+    .w-100 {
+        width: 100%;
+    }
+
+    /* Monto */
+    .amount-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin: 16px 0 8px;
+        color: #374151;
+    }
+
+        .amount-row strong {
+            font-size: 1.05rem;
+        }
+
+    /* Acciones */
+    .actions {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        justify-content: space-between;
+        margin-top: 16px;
+    }
+
+    .btn {
+        height: 46px;
+        border-radius: 12px;
+        padding: 0 18px;
+        font-weight: 700;
+        cursor: pointer;
+        text-decoration: none;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .btn-primary {
+        border: 0;
+        background: var(--brand-blue);
+        color: #fff;
+        width: 100%;
+    }
+
+        .btn-primary:hover {
+            filter: brightness(1.05);
+        }
+
+        .btn-primary:disabled {
+            opacity: .6;
+            cursor: not-allowed;
+        }
+
+    .status {
+        margin-top: 14px;
+        border: 1px solid #E5E7EB;
+        background: #F8FAFC;
+        color: #334155;
+        padding: 10px 12px;
+        border-radius: 10px;
+    }
+
+    #tlpy_cc_number:not(:placeholder-shown):invalid {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239,68,68,.15);
+    }
+
+    #tlpy_cvv:not(:placeholder-shown):invalid {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239,68,68,.15);
+    }
+
+    #tlpy_cc_expiration_date:not(:placeholder-shown):invalid {
+        border-color: #ef4444;
+        box-shadow: 0 0 0 3px rgba(239,68,68,.15);
+    }
+
+</style>
+
+@code {
+
+    private string PayLabel => FormatPayLabel(Amount, Currency);
+
+    private static string FormatPayLabel(decimal amount, string? currency)
+    {
+        currency = currency?.ToUpperInvariant();
+        var symbol = currency switch
         {
-            "success" or "approved" or "ok" or "completed" => " Pago aprobado",
-            "error" or "failed" or "denied" or "declined" => $" Pago rechazado: {evt?.payload}",
-            _ => $" Resultado: {evt?.status} {evt?.payload}"
+            "CRC" => "₡",
+            "USD" => "$",
+            _ => (string.IsNullOrWhiteSpace(currency) ? "" : currency + " ")
         };
-
-        StateHasChanged();
-        return Task.CompletedTask;
-    }
-
-    public sealed class PaymentEvent
-    {
-        public string? status { get; set; }
-        public object? payload { get; set; }
+        var culture = currency switch
+        {
+            "CRC" => new System.Globalization.CultureInfo("es-CR"),
+            "USD" => new System.Globalization.CultureInfo("en-US"),
+            _ => System.Globalization.CultureInfo.InvariantCulture
+        };
+        return symbol + amount.ToString("N2", culture);
     }
 }
+
+<script>
+    (function () {
+      window.formatAndValidateExpiry = function (el, markInvalid) {
+        let digits = el.value.replace(/\D/g, '').slice(0, 4);
+
+        if (digits.length >= 3) {
+          let mm = digits.slice(0, 2);
+          let m = parseInt(mm || '0', 10);
+          if (m < 1) m = 1;
+          if (m > 12) m = 12;
+          mm = m.toString().padStart(2, '0');
+          el.value = mm + '/' + digits.slice(2);
+        } else {
+          el.value = digits;
+          if (digits.length === 2) {
+            let m = parseInt(digits, 10);
+            if (m < 1) m = 1;
+            if (m > 12) m = 12;
+            el.value = m.toString().padStart(2, '0');
+          }
+        }
+
+
+        const m = el.value.match(/^(\d{2})\/(\d{2})$/);
+        let ok = false;
+        if (m) {
+          const mm = parseInt(m[1], 10);
+          const yy = parseInt(m[2], 10);            
+          const now = new Date();
+          const curYY = now.getFullYear() % 100;      
+          const curMM = now.getMonth() + 1;           
+
+          ok = (yy > curYY) || (yy === curYY && mm >= curMM);
+          if (mm < 1 || mm > 12) ok = false;
+        }
+
+        if (ok) {
+          el.setCustomValidity('');
+        } else {
+          el.setCustomValidity('Fecha inválida o expirada (MM/YY).');
+        }
+      };
+    })();
+</script>

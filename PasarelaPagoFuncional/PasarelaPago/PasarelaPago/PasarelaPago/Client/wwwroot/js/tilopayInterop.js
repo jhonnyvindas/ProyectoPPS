@@ -1,4 +1,4 @@
-﻿// wwwroot/js/tilopayInterop.js
+﻿
 window.tilopayInterop = (function () {
     let _inited = false;
     let _busy = false;
