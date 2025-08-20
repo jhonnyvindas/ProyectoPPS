@@ -1,0 +1,26 @@
+# Archivos de Visual Studio
+.vs/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+.idea/
+
+# Salidas de compilación
+[Bb]in/
+[Oo]bj/
+[Dd]ebug*/
+[Rr]elease*/
+x64/
+x86/
+[Aa]rtifacts/
+
+# Paquetes
+*.nupkg
+*.snupkg
+
+# Logs y temporales
+*.log
+*.cache
+*.tmp

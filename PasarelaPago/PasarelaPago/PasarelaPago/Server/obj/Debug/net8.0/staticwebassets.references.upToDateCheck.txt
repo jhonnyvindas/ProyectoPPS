@@ -1,7 +1,0 @@
-C:\Users\Simon\source\repos\PasarelaPago\PasarelaPago\Client\obj\Debug\net8.0\staticwebassets.build.json
-C:\Users\Simon\source\repos\PasarelaPago\PasarelaPago\Client\obj\Debug\net8.0\staticwebassets.build.json
-C:\Users\User\Documents\GitHub\ProyectoPPS\PasarelaPago\PasarelaPago\PasarelaPago\Client\obj\Debug\net8.0\staticwebassets.build.json
-C:\Users\User\Documents\GitHub\ProyectoPPS\PasarelaPago\PasarelaPago\PasarelaPago\Client\obj\Debug\net8.0\staticwebassets.build.json
-C:\Users\User\Documents\GitHub\ProyectoPPS\PasarelaPago\PasarelaPago\PasarelaPago\Client\obj\Debug\net8.0\staticwebassets.build.json
-C:\Users\User\Documents\GitHub\ProyectoPPS\PasarelaPago\PasarelaPago\PasarelaPago\Client\obj\Debug\net8.0\staticwebassets.build.json
-C:\Users\User\Documents\GitHub\ProyectoPPS\PasarelaPago\PasarelaPago\PasarelaPago\Client\obj\Debug\net8.0\staticwebassets.build.json

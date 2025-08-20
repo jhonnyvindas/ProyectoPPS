@@ -1,0 +1,191 @@
+﻿@page "/pagos/tilopay"
+@inject PasarelaPago.Client.Services.TilopayApi Api
+@inject IJSRuntime JS
+@inject NavigationManager Nav
+
+<h3>Pago con Tilopay (SDK)</h3>
+
+<div class="payFormTilopay">
+    <div class="row">
+        <label for="method">Payment Method</label>
+        <select id="tlpy_payment_method" name="tlpy_payment_method">
+            <option value="12:3:88802749:payfac:0:" selected>Tarjeta</option>
+        </select>
+    </div>
+
+    <div class="row">
+        <label for="ccnumber">Card Number</label>
+        <input type="text" id="tlpy_cc_number" name="tlpy_cc_number" inputmode="numeric" value="4012000000020089" />
+    </div>
+
+    <div class="row">
+        <label for="expdate">Card Expire (MM/YY)</label>
+        <input type="text" id="tlpy_cc_expiration_date" name="tlpy_cc_expiration_date" placeholder="MM/YY" value="12/26" />
+    </div>
+
+    <div class="row">
+        <label for="cvv">CVV</label>
+        <input type="text" id="tlpy_cvv" name="ctlpy_cvvv" inputmode="numeric" value="123" />
+    </div>
+
+
+    <input type="hidden" id="orderNumber" name="orderNumber" value="@OrderNumber" />
+    <input type="hidden" id="amount" name="amount" value="@AmountString" />
+    <input type="hidden" id="currency" name="currency" value="@Currency" />
+    <input type="hidden" id="redirect" name="redirect" value="@RedirectUrl" />
+
+    <input type="hidden" id="billToEmail" name="billToEmail" value="demo@example.com" />
+    <input type="hidden" id="billToFirstName" name="billToFirstName" value="Demo" />
+    <input type="hidden" id="billToLastName" name="billToLastName" value="User" />
+    <input type="hidden" id="billToAddress" name="billToAddress" value="123 Main Street" />
+    <input type="hidden" id="billToCity" name="billToCity" value="San José" />
+    <input type="hidden" id="billToCountry" name="billToCountry" value="CR" />
+    <input type="hidden" id="billToState" name="billToState" value="SJ" />
+    <input type="hidden" id="billToZipPostCode" name="billToZipPostCode" value="10101" />
+    <input type="hidden" id="billToTelephone" name="billToTelephone" value="88888888" />
+</div>
+<div id="responseTilopay"></div>
+<div class="row" style="margin-top:12px">
+    <button type="button" @onclick="Pagar" disabled="@Pagando">
+        @(Pagando ? "Procesando…" : "Pagar")
+    </button>
+</div>
+
+<div id="result"></div>
+
+
+@if (!string.IsNullOrWhiteSpace(Estado))
+{
+    <div style="margin-top:10px;border:1px solid #ddd;padding:8px">@Estado</div>
+}
+
+@code {
+    private string? Estado;
+    private bool Pagando;
+    private DotNetObjectReference<PagoTilopay>? _selfRef;
+
+    private string OrderNumber { get; set; } = Guid.NewGuid().ToString("N");
+    private decimal Amount { get; set; } = 1.00m;
+    private string AmountString => Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
+    private string Currency { get; set; } = "USD";
+    private string RedirectUrl => BuildRedirectUrl("/pagos/resultado");
+
+    protected override void OnInitialized()
+    {
+        _selfRef = DotNetObjectReference.Create(this);
+    }
+
+
+    public async ValueTask DisposeAsync()
+    {
+        _selfRef?.Dispose();
+        await Task.CompletedTask;
+    }
+
+    private string BuildRedirectUrl(string path)
+    {
+      
+        var uri = new Uri(Nav.Uri);
+        var scheme = "https"; 
+        var host = uri.Host;
+        var port = uri.IsDefaultPort ? "" : $":{uri.Port}";
+        return $"{scheme}://{host}{port}{path}";
+    }
+
+    private async Task Pagar()
+    {
+        if (Pagando) return;
+        Pagando = true;
+
+        try
+        {
+            Estado = "Obteniendo token…";
+            StateHasChanged();
+
+            // 1) Token desde tu API (Server -> Tilopay /login)
+            var token = await Api.GetSdkTokenAsync();
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Estado = "No se obtuvo token del servidor.";
+                return;
+            }
+
+            // 2) Inicializar el SDK con los parámetros requeridos
+            Estado = "Inicializando SDK…";
+            StateHasChanged();
+
+            
+            OrderNumber = Guid.NewGuid().ToString("N");
+            StateHasChanged(); 
+
+            await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, new
+            {
+                orderNumber = OrderNumber,
+                amount = AmountString,
+                currency = Currency,
+                description = "Compra de prueba",
+                language = "es",
+                capture = "1",
+                redirect = RedirectUrl,
+                billToEmail = "demo@example.com",
+                billToFirstName = "Demo",
+                billToLastName = "User",
+                billToAddress = "123 Main Street",
+                billToCity = "San José",
+                billToCountry = "CR",
+                billToState = "SJ",
+                billToZipPostCode = "10101",
+                billToTelephone = "88888888",
+                subscription = 0,
+                hashVersion = "V2"
+            }, _selfRef);
+
+
+            // 3) Validar datos
+            Estado = "Validando datos…";
+            StateHasChanged();
+
+            // 4) Disparar el pago (startPayment)
+            Estado = "Invocando checkout…";
+            StateHasChanged();
+
+            await JS.InvokeVoidAsync("tilopayInterop.prepareAndPay");
+
+            Estado = "Esperando confirmación del banco…";
+        }
+        catch (JSException jse)
+        {
+            Estado = $"Error JS/SDK: {jse.Message}";
+        }
+        catch (Exception ex)
+        {
+            Estado = $"Error: {ex.Message}";
+        }
+        finally
+        {
+            Pagando = false;
+        }
+    }
+
+    [JSInvokable]
+    public Task OnPaymentEvent(PaymentEvent evt)
+    {
+
+        var status = (evt?.status ?? "").ToLowerInvariant();
+        Estado = status switch
+        {
+            "success" or "approved" or "ok" or "completed" => " Pago aprobado",
+            "error" or "failed" or "denied" or "declined" => $" Pago rechazado: {evt?.payload}",
+            _ => $" Resultado: {evt?.status} {evt?.payload}"
+        };
+
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
+
+    public sealed class PaymentEvent
+    {
+        public string? status { get; set; }
+        public object? payload { get; set; }
+    }
+}
