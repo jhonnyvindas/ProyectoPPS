@@ -30,7 +30,7 @@ window.tilopayInterop = (function () {
         } catch { }
     }
 
-    // ------------------ INIT UNA SOLA VEZ ------------------
+
     async function ensureInit(token, options, dotnetRef) {
         ensureSdk();
         require(!!token, "Token vacío para Init");
@@ -53,21 +53,6 @@ window.tilopayInterop = (function () {
         _inited = true;
         console.log("[tilopayInterop] SDK inicializado ✔", initResult);
 
-        // Enlaza callbacks .NET
-        //try {
-        //    window.Tilopay.response200() = function (payload) {
-        //        console.log("[Tilopay][200]", payload);
-        //        if (_dotnetRef) _dotnetRef.invokeMethodAsync("OnPaymentEvent", { status: "success", payload });
-        //    };
-        //    window.Tilopay.response400() = function (payload) {
-        //        console.warn("[Tilopay][400]", payload);
-        //        if (_dotnetRef) _dotnetRef.invokeMethodAsync("OnPaymentEvent", { status: "error", payload });
-        //    };
-        //} catch (e) {
-        //    console.warn("[tilopayInterop] no fue posible envolver response200/400:", e);
-        //}
-
-        //setDefaultMethod("card");
         return true;
     }
 
@@ -91,7 +76,6 @@ window.tilopayInterop = (function () {
         if (cards && cards.closest(".row")) cards.closest(".row").style.display = "none";
     }
 
-    // ------------------ PAY ------------------
     async function prepareAndPay() {
         ensureSdk();
         require(_inited, "SDK no inicializado; llama a ensureInit primero.");
@@ -105,25 +89,8 @@ window.tilopayInterop = (function () {
 
 
         try {
-            //await maybeCancel();
-
-            //// order único
-            //if (!updateOptionsObj || !updateOptionsObj.orderNumber) {
-            //    updateOptionsObj = Object.assign({}, updateOptionsObj || {}, {
-            //        orderNumber: (crypto?.randomUUID?.() || Date.now().toString())
-            //    });
-            //}
-
-            //if (typeof window.Tilopay.updateOptions === "function") {
-            //    const result_update = await window.Tilopay.updateOptions(updateOptionsObj);
-            //    console.log("[updateOptions] resultado:", result_update);
-            //}
-
             console.log("[tilopayInterop] startPayment()");
             const result = await window.Tilopay.startPayment();
-
-
-
 
             console.log("[tilopayInterop] resultado:", result);
 
@@ -137,10 +104,65 @@ window.tilopayInterop = (function () {
         }
     }
 
+    async function getCardTypeOnce() {
+
+        try {
+            if (window.Tilopay && typeof window.Tilopay.getCardType === "function") {
+                const res = await window.Tilopay.getCardType();
+                const val = (typeof res === "string") ? res : (res?.message || res?.type || "");
+                if (val) return String(val).toLowerCase();
+            }
+        } catch (e) {
+            console.warn("[tilopayInterop] getCardTypeOnce SDK error:", e);
+        }
+
+
+        const el = document.querySelector("#tlpy_cc_number");
+        const raw = (el?.value || "").replace(/\s+/g, "");
+        if (!raw) return "";
+
+
+        if (/^4\d{6,}$/.test(raw)) return "visa";
+        if (/^(5[1-5]\d{4,}|2(2[2-9]\d{3}|2[3-9]\d{4}|[3-6]\d{5}|7[01]\d{4}|720\d{3}))\d*$/.test(raw)) return "mastercard";
+        if (/^3[47]\d{5,}$/.test(raw)) return "amex";
+
+        return "";
+    }
+
+    function watchCardType(selector, dotnetRef, methodName) {
+        require(!!selector, "Selector vacío");
+        const el = document.querySelector(selector);
+        require(!!el, `No se encontró ${selector}`);
+
+        let t = null;
+        const trigger = () => {
+            clearTimeout(t);
+            t = setTimeout(async () => {
+                const brand = await getCardTypeOnce();
+                if (dotnetRef && methodName) {
+                    try { await dotnetRef.invokeMethodAsync(methodName, brand); } catch { }
+                }
+            }, 100);
+        };
+
+        el.addEventListener("input", trigger);
+        el.addEventListener("change", trigger);
+        el.addEventListener("paste", trigger);
+        el.addEventListener("keyup", trigger);
+
+
+        trigger();
+
+    }
+
+
     return {
         ensureInit,
         prepareAndPay,
         hideMethodAndCards,
-        setDefaultMethod
+        setDefaultMethod,
+        getCardTypeOnce,
+        watchCardType
+
     };
 })();

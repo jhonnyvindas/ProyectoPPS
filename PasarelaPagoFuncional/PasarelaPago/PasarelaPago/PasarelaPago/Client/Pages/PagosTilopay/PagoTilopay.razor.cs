@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.FileSystemGlobbing;
 using Microsoft.JSInterop;
 using PasarelaPago.Client;
 using System;
@@ -11,6 +12,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     [Inject] private PasarelaPago.Client.Services.TilopayApi Api { get; set; } = default!;
     [Inject] private IJSRuntime JS { get; set; } = default!;
     [Inject] private NavigationManager Nav { get; set; } = default!;
+    private IJSObjectReference? _watcher;
 
     private string? Estado;
     private bool Pagando;
@@ -21,18 +23,12 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     private string AmountString => Amount.ToString("F2", System.Globalization.CultureInfo.InvariantCulture);
     private string Currency { get; set; } = "USD";
     private string RedirectUrl => BuildRedirectUrl("/pagos/resultado");
+    private string CardBrand { get; set; } = "";
 
     protected override void OnInitialized()
     {
         _selfRef = DotNetObjectReference.Create(this);
     }
-
-    public async ValueTask DisposeAsync()
-    {
-        _selfRef?.Dispose();
-        await Task.CompletedTask;
-    }
-
     private string BuildRedirectUrl(string path)
     {
         var uri = new Uri(Nav.Uri);
@@ -127,10 +123,38 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    // Modelo interno (para no depender de archivos extra)
     public sealed class PaymentEvent
     {
         public string? status { get; set; }
         public object? payload { get; set; }
     }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        await JS.InvokeVoidAsync(
+            "tilopayInterop.watchCardType",
+            "#tlpy_cc_number",
+            _selfRef,
+            nameof(SetCardBrand)
+        );
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        // ya no intentes llamar a _watcher.InvokeVoidAsync("call")
+        _selfRef?.Dispose();
+        await Task.CompletedTask;
+    }
+
+
+    [JSInvokable]
+    public Task SetCardBrand(string brand)
+    {
+        CardBrand = brand ?? "";
+        StateHasChanged();
+        return Task.CompletedTask;
+    }
 }
+

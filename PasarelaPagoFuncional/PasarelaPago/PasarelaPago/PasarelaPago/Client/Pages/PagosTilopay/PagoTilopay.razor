@@ -15,16 +15,37 @@
     <!-- DATOS DE LA TARJETA -->
     <h4 class="section-title">Datos de la tarjeta</h4>
     <div class="box card-form">
-        <input type="text" id="tlpy_cc_number" name="tlpy_cc_number"
-               placeholder="1234 5678 9012 3456" inputmode="numeric" autocomplete="cc-number"
-               maxlength="19" 
-        pattern="\d{4} \d{4} \d{4} \d{4}"
-        title="Ingrese 16 dígitos en el formato 1234 5678 9012 3456"
-        oninput="this.value=this.value
-        .replace(/\D/g,'')      
-        .slice(0,16)
-        .replace(/(\d{4})(?=\d)/g,'$1 ') 
-        .trim();">
+        <div class="cc-wrapper">
+            <input type="text" id="tlpy_cc_number" name="tlpy_cc_number"
+                   placeholder="1234 5678 9012 3456" inputmode="numeric" autocomplete="cc-number"
+                   maxlength="19"
+                   pattern="\d{4} \d{4} \d{4} \d{4}"
+                   title="Ingrese 16 dígitos en el formato 1234 5678 9012 3456"
+                   oninput="this.value=this.value
+             .replace(/\D/g,'')
+             .slice(0,16)
+             .replace(/(\d{4})(?=\d)/g,'$1 ')
+             .trim();" />
+
+            <div class="cc-logo">
+                @if (!string.IsNullOrWhiteSpace(CardBrand))
+                {
+                    @if (CardBrand == "visa")
+                    {
+                        <img src="img/visa.png" alt="Visa" />
+                    }
+                    else if (CardBrand == "mastercard")
+                    {
+                        <img src="img/masterCard.png" alt="Mastercard" />
+                    }
+                    else if (CardBrand == "amex")
+                    {
+                        <img src="img/amex.png" alt="Amex" />
+                    }
+                }
+            </div>
+        </div>
+
         <div class="card-row">
             <input type="text"
                    id="tlpy_cc_expiration_date"
@@ -98,8 +119,7 @@
 
 <style>
     :root {
-        /* Celeste oscuro de marca */
-        --brand-blue: #0C7BD9;
+       
     }
 
     /* Layout general */
@@ -249,7 +269,33 @@
         box-shadow: 0 0 0 3px rgba(239,68,68,.15);
     }
 
+    .cc-wrapper {
+        position: relative;
+        display: inline-block;
+        width: 100%;
+    }
+      .cc-wrapper input {
+            width: 100%;
+            padding-right: 50px; 
+        }
+
+
+    .cc-logo {
+        position: absolute;
+        top: 50%;
+        right: 10px;
+        transform: translateY(-50%);
+        display: flex;
+        align-items: center;
+        pointer-events: none; 
+    }
+
+        .cc-logo img {
+            height: 20px; 
+            display: block;
+        }
 </style>
+
 
 @code {
 
@@ -313,7 +359,7 @@
         if (ok) {
           el.setCustomValidity('');
         } else {
-          el.setCustomValidity('Fecha inválida o expirada (MM/YY).');
+          el.setCustomValidity('Fecha inválida.');
         }
       };
     })();
