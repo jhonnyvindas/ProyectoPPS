@@ -2,6 +2,8 @@
 
 <div class="pago-container">
 
+    <form id="payFormTilopay" class="payFormTilopay form-reset" novalidate>
+
     <h3 class="tilo-title">Pago de servicios de Synergia</h3>
 
     <!-- MÉTODO DE PAGO -->
@@ -56,8 +58,8 @@
                    maxlength="5"                                  
             pattern="^(0[1-9]|1[0-2])\/\d{2}$"
             title="Formato MM/YY. Mes entre 01 y 12"
-            oninput="formatAndValidateExpiry(this)"
-            onblur="formatAndValidateExpiry(this, true)" />
+                       oninput="formatAndValidateExpiry(this)"
+                       onblur="formatAndValidateExpiry(this, true)" />
 
                    
             <input type="text" id="tlpy_cvv" name="tlpy_cvv"
@@ -74,12 +76,23 @@
     <h4 class="section-title">Datos del propietario</h4>
     <div class="box owner-form">
         <div class="two-cols">
-            <input type="text" id="billToFirstName" name="billToFirstName" placeholder="Nombre" />
-            <input type="text" id="billToLastName" name="billToLastName" placeholder="Apellido" />
+            <input type="text" id="billToFirstName" name="billToFirstName" placeholder="Nombre" required pattern="^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,40}$"
+                   title="Solo letras y espacios (2 a 40 caracteres)" />
+            <input type="text" id="billToLastName" name="billToLastName" placeholder="Apellido" required
+                   pattern="^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,40}$"
+                   title="Solo letras y espacios (2 a 40 caracteres)" />
         </div>
-        <input type="text" id="customerId" name="customerId" placeholder="Cédula" />
-        <input type="text" id="billToTelephone" name="billToTelephone" placeholder="Teléfono" inputmode="numeric" />
-        <input type="text" id="billToEmail" name="billToEmail" placeholder="Correo electrónico" />
+        <input type="text" id="customerId" name="customerId" placeholder="Cédula" required
+               minlength="9" maxlength="12"
+               pattern="^\d{9,12}$"
+               title="Ingrese entre 9 y 12 dígitos (solo números)"
+               oninput="validateCedula(this)" />
+        <input type="text" id="billToTelephone" name="billToTelephone" placeholder="Teléfono" inputmode="numeric" required
+               maxlength="9" pattern="^\d{4}-?\d{4}$"
+               title="Formato ####-#### (8 dígitos)"
+               oninput="formatCRPhone(this)"  />
+        <input type="text" id="billToEmail" name="billToEmail" placeholder="Correo electrónico" required
+               title="Ingrese un correo válido (ej. nombre@gmail.com)"  />
     </div>
 
     <!-- MONTO A CANCELAR -->
@@ -87,6 +100,7 @@
         <h4 class="section-title">Monto a cancelar</h4>
         <strong>@PayLabel</strong>
     </div>
+
 
     <!-- INPUTS OCULTOS TILOPAY -->
     <input type="hidden" id="orderNumber" name="orderNumber" value="@OrderNumber" />
@@ -104,9 +118,15 @@
 
     <!-- ACCIONES -->
     <div class="actions">
-        <button type="button" class="btn btn-primary" @onclick="Pagar" disabled="@Pagando">
-            @(Pagando ? "Procesando…" : "Pagar")
-        </button>
+            <button type="button"
+                    id="btnPagar"
+                    class="btn btn-primary"
+                    @onclick="Pagar"
+                    disabled>
+                @(Pagando ? "Procesando…" : "Pagar")
+            </button>
+            <div id="validationMessage" style="color:red; margin-top:10px;"></div>
+
     </div>
 
     <div id="result"></div>
@@ -115,27 +135,30 @@
     {
         <div class="status">@Estado</div>
     }
-</div>
+    </form>
+     </div>
+
 
 <style>
     :root {
+        --brand-blue: #0A66FF;
        
     }
 
-    /* Layout general */
+
     .pago-container {
         max-width: 640px;
         margin: 24px auto;
         padding: 0 16px;
     }
 
-    /* Título principal */
+
     .tilo-title {
         margin: 0 0 16px;
         text-align: center;
         font-weight: 800;
-        font-size: 1.75rem; /* más grande */
-        color: var(--brand-blue); /* celeste oscuro */
+        font-size: 1.75rem; 
+        color: var(--brand-blue, #0A66FF);
     }
 
     .section-title {
@@ -195,7 +218,7 @@
         width: 100%;
     }
 
-    /* Monto */
+
     .amount-row {
         display: flex;
         justify-content: space-between;
@@ -208,7 +231,7 @@
             font-size: 1.05rem;
         }
 
-    /* Acciones */
+
     .actions {
         display: flex;
         gap: 12px;
@@ -231,7 +254,7 @@
 
     .btn-primary {
         border: 0;
-        background: var(--brand-blue);
+        background: var(--brand-blue, #0A66FF);
         color: #fff;
         width: 100%;
     }
@@ -321,46 +344,90 @@
 }
 
 <script>
-    (function () {
-      window.formatAndValidateExpiry = function (el, markInvalid) {
-        let digits = el.value.replace(/\D/g, '').slice(0, 4);
+    // ====== FECHA MM/YY ======
+    window.formatAndValidateExpiry = function (el) {
+      let v = el.value.replace(/\D/g, '').slice(0, 4); // solo dígitos, máx 4
 
-        if (digits.length >= 3) {
-          let mm = digits.slice(0, 2);
-          let m = parseInt(mm || '0', 10);
-          if (m < 1) m = 1;
-          if (m > 12) m = 12;
-          mm = m.toString().padStart(2, '0');
-          el.value = mm + '/' + digits.slice(2);
-        } else {
-          el.value = digits;
-          if (digits.length === 2) {
-            let m = parseInt(digits, 10);
-            if (m < 1) m = 1;
-            if (m > 12) m = 12;
-            el.value = m.toString().padStart(2, '0');
-          }
+      if (v.length === 0) { el.value = ''; el.setCustomValidity('Fecha inválida.'); return; }
+
+      if (v.length === 1) {
+        if (parseInt(v,10) > 1) v = '0' + v; // permite teclear 0 para 01..09
+        el.value = v;
+        el.setCustomValidity('Fecha inválida.');
+        return;
+      }
+
+      // ya hay 2 dígitos -> normaliza mes
+      let mm = v.slice(0,2);
+      if (mm === '00') mm = '01';
+      let m = parseInt(mm,10);
+      if (m < 1) m = 1;
+      if (m > 12) m = 12;
+      mm = m.toString().padStart(2,'0');
+
+      const yy = v.slice(2,4);
+      el.value = mm + (yy ? '/' + yy : '');
+
+      // valida completo solo si hay MM/YY
+      let ok = false;
+      if (yy.length === 2) {
+        const now = new Date();
+        const curYY = now.getFullYear() % 100;
+        const curMM = now.getMonth() + 1;
+        ok = (m >= 1 && m <= 12) && (parseInt(yy,10) > curYY || (parseInt(yy,10) === curYY && m >= curMM));
+      }
+      el.setCustomValidity(ok ? '' : 'Fecha inválida.');
+    };
+
+    // ====== TELÉFONO CR ####-#### ======
+    window.formatCRPhone = function(el){
+      let d = el.value.replace(/\D/g,'').slice(0,8);
+      el.value = d.length > 4 ? d.slice(0,4) + '-' + d.slice(4) : d;
+      el.setCustomValidity(/^\d{4}-?\d{4}$/.test(el.value) ? '' : 'Teléfono inválido (use ####-####)');
+    };
+
+    // ====== CÉDULA 9-12 dígitos ======
+    window.validateCedula = function(el){
+      el.value = el.value.replace(/\D/g,'').slice(0,12);
+      el.setCustomValidity(/^\d{9,12}$/.test(el.value) ? '' : 'La cédula debe tener entre 9 y 12 dígitos');
+    };
+
+    // ====== VALIDACIÓN GLOBAL + TOGGLE DEL BOTÓN ======
+    (function(){
+      const requiredIds = [
+        "billToFirstName","billToLastName","customerId",
+        "billToTelephone","billToEmail",
+        "tlpy_cc_number","tlpy_cc_expiration_date","tlpy_cvv"
+      ];
+
+      function togglePay(){
+        const btn = document.getElementById("btnPagar");
+        let allValid = true;
+        for (const id of requiredIds){
+          const el = document.getElementById(id);
+          if(!el || !el.value.trim() || !el.checkValidity()){ allValid = false; break; }
         }
+        if (btn) btn.disabled = !allValid;
+      }
 
+      // función para usar desde C# antes de pagar
+      window.validatePayForm = function(){
+        const form = document.getElementById('payFormTilopay');
+        const msg  = document.getElementById('validationMessage');
+        if (!form) return false;
 
-        const m = el.value.match(/^(\d{2})\/(\d{2})$/);
-        let ok = false;
-        if (m) {
-          const mm = parseInt(m[1], 10);
-          const yy = parseInt(m[2], 10);            
-          const now = new Date();
-          const curYY = now.getFullYear() % 100;      
-          const curMM = now.getMonth() + 1;           
-
-          ok = (yy > curYY) || (yy === curYY && mm >= curMM);
-          if (mm < 1 || mm > 12) ok = false;
+        const ok = form.checkValidity();
+        if (!ok){
+          form.reportValidity();
+          if (msg) msg.textContent = "Debes completar todos los campos antes de continuar.";
+          return false;
         }
-
-        if (ok) {
-          el.setCustomValidity('');
-        } else {
-          el.setCustomValidity('Fecha inválida.');
-        }
+        if (msg) msg.textContent = "";
+        return true;
       };
+
+      window.addEventListener('input', togglePay);
+      window.addEventListener('change', togglePay);
+      setTimeout(togglePay, 0); // primer chequeo
     })();
 </script>

@@ -154,8 +154,6 @@ window.tilopayInterop = (function () {
         trigger();
 
     }
-
-
     return {
         ensureInit,
         prepareAndPay,

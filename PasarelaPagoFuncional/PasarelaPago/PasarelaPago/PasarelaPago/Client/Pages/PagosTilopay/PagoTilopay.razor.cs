@@ -32,7 +32,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     private string BuildRedirectUrl(string path)
     {
         var uri = new Uri(Nav.Uri);
-        var scheme = "https"; // conservado tal cual tu versión
+        var scheme = "https"; 
         var host = uri.Host;
         var port = uri.IsDefaultPort ? "" : $":{uri.Port}";
         return $"{scheme}://{host}{port}{path}";
@@ -40,8 +40,13 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     private async Task Pagar()
     {
-        if (Pagando) return;
-        Pagando = true;
+        var ok = await JS.InvokeAsync<bool>("validatePayForm");
+        if (!ok)
+        {
+            Estado = "Formulario incompleto o inválido.";
+            StateHasChanged();
+            return;
+        }
 
         try
         {
@@ -143,7 +148,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
-        // ya no intentes llamar a _watcher.InvokeVoidAsync("call")
         _selfRef?.Dispose();
         await Task.CompletedTask;
     }
