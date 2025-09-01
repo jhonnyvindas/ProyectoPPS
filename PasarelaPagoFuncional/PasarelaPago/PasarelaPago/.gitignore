@@ -1,26 +1,25 @@
-# Archivos de Visual Studio
+# Archivos de configuración de usuario de VS
 .vs/
-.vscode/
-*.suo
 *.user
-*.userosscache
-*.sln.docstates
-.idea/
+*.suo
 
-# Salidas de compilación
-[Bb]in/
-[Oo]bj/
-[Dd]ebug*/
-[Rr]elease*/
-x64/
-x86/
-[Aa]rtifacts/
+# Compilación
+bin/
+obj/
+Debug/
+Release/
+*.exe
+*.dll
+*.pdb
 
-# Paquetes
-*.nupkg
-*.snupkg
-
-# Logs y temporales
+# Archivos temporales
 *.log
 *.cache
 *.tmp
+
+# Archivos de configuración de IDE
+*.vscode/
+*.idea/
+
+# Otros
+*.vsidx

@@ -1,433 +1,426 @@
 ﻿@page "/pagos/tilopay"
+@namespace PasarelaPago.Client.Pages.PagosTilopay
+@using MudBlazor
+@using System.Collections.Generic
 
-<div class="pago-container">
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mx-auto mt-6">
 
-    <form id="payFormTilopay" class="payFormTilopay form-reset" novalidate>
+    <!-- Wrapper sin <form> para no interferir con el SDK -->
+    <div id="payFormTilopay" class="payFormTilopay form-reset">
 
-    <h3 class="tilo-title">Pago de servicios de Synergia</h3>
+        <MudGrid Justify="Justify.Center">
+            <MudItem xs="12" sm="10" md="9" lg="8" xl="7">
 
-    <!-- MÉTODO DE PAGO -->
-    <h4 class="section-title">Elegir método de pago</h4>
-    <div class="box">
-        <select id="tlpy_payment_method" name="tlpy_payment_method" class="w-100">
-            <option value="12:3:88802749:payfac:0:" selected>Tarjeta</option>
-        </select>
-    </div>
+                <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-2">
+                    Pago de servicios
+                </MudText>
 
-    <!-- DATOS DE LA TARJETA -->
-    <h4 class="section-title">Datos de la tarjeta</h4>
-    <div class="box card-form">
-        <div class="cc-wrapper">
-            <input type="text" id="tlpy_cc_number" name="tlpy_cc_number"
-                   placeholder="1234 5678 9012 3456" inputmode="numeric" autocomplete="cc-number"
-                   maxlength="19"
-                   pattern="\d{4} \d{4} \d{4} \d{4}"
-                   title="Ingrese 16 dígitos en el formato 1234 5678 9012 3456"
-                   oninput="this.value=this.value
-             .replace(/\D/g,'')
-             .slice(0,16)
-             .replace(/(\d{4})(?=\d)/g,'$1 ')
-             .trim();" />
+                <!-- Método de pago -->
+                <MudCard Class="mb-3">
+                    <MudCardContent>
+                        <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Métodos de pago</MudText>
 
-            <div class="cc-logo">
-                @if (!string.IsNullOrWhiteSpace(CardBrand))
+                        <MudSelect T="string"
+                                   @bind-Value="SelectedPaymentMethod"
+                                   FullWidth Dense
+                                   Margin="Margin.Dense"
+                                   Variant="Variant.Outlined">
+                            <MudSelectItem T="string" Value="@PAYFAC">Tarjeta</MudSelectItem>
+                            <MudSelectItem T="string" Value="@SIMPE">SINPE Móvil</MudSelectItem>
+                        </MudSelect>
+
+                        <!-- Refuerzo para el SDK -->
+                        <input type="hidden"
+                               id="tlpy_payment_method"
+                               name="tlpy_payment_method"
+                               value="@SelectedPaymentMethod" />
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Datos de la tarjeta -->
+                @if (SelectedPaymentMethod == PAYFAC)
                 {
-                    @if (CardBrand == "visa")
-                    {
-                        <img src="img/visa.png" alt="Visa" />
-                    }
-                    else if (CardBrand == "mastercard")
-                    {
-                        <img src="img/masterCard.png" alt="Mastercard" />
-                    }
-                    else if (CardBrand == "amex")
-                    {
-                        <img src="img/amex.png" alt="Amex" />
-                    }
+                    <MudCard Class="mb-2">
+                        <MudCardContent Class="py-1 px-3">
+                            <MudText Typo="Typo.subtitle1" Bold Class="mb-1">Datos de la tarjeta</MudText>
+
+                            <MudGrid Spacing="3">
+                                <MudItem xs="12">
+                                    <MudStack Class="cc-wrapper" Style="position:relative;">
+                                        <MudTextField T="string"
+                                                  Id="tlpy_cc_number"
+                                                  Label="Número de tarjeta"
+                                                  Placeholder="1234 5678 9012 3456"
+                                                  @bind-Value="CardNumber"
+                                                  Immediate
+                                                  MaxLength="@CardNumberMaxChars"   
+                                                  FullWidth Dense Margin="Margin.Dense"
+                                                  Variant="Variant.Outlined"
+                                                  InputType="InputType.Telephone"
+                                                  Validation="ValidateCardNumber"
+                                                  InputClass="cc-input-pad"
+                                                  InputAttributes="@(new Dictionary<string, object> {
+                                                      ["name"] = "tlpy_cc_number",
+                                                      ["inputmode"] = "numeric",
+                                                      ["autocomplete"] = "cc-number"
+                                                  })" />
+
+                                        <MudStack Row="true"
+                                                  AlignItems="AlignItems.Center"
+                                                  Spacing="1"
+                                                  Class="cc-logos"
+                                                  Style="position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none;">
+                                            <MudImage Src="/img/visa.png"
+                                                      Alt="Visa"
+                                                      Class="@($"cc-logo {(CardBrand == "visa" ? "active" : "")}")"
+                                                      Style="height:20px" />
+                                            <MudImage Src="/img/mastercard.png"
+                                                      Alt="Mastercard"
+                                                      Class="@($"cc-logo {(CardBrand == "mastercard" ? "active" : "")}")"
+                                                      Style="height:20px" />
+                                            <MudImage Src="/img/amex.png"
+                                                      Alt="American Express"
+                                                      Class="@($"cc-logo {(CardBrand == "amex" ? "active" : "")}")"
+                                                      Style="height:20px" />
+                                        </MudStack>
+                                    </MudStack>
+
+                                </MudItem>
+
+                                <MudItem xs="6">
+                                    <MudTextField T="string"
+                                                  Id="tlpy_cc_expiration_date"
+                                                  Label="Fecha vencimiento"
+                                                  Placeholder="MM/YY"
+                                                  @bind-Value="Expiry"
+                                                  Immediate MaxLength="5"
+                                                  FullWidth Dense Margin="Margin.Dense"
+                                                  Variant="Variant.Outlined"
+                                                  InputType="InputType.Telephone"
+                                                  Validation="ValidateExpiry"
+                                                  InputAttributes="@(new Dictionary<string, object> {
+                                                      ["name"] = "tlpy_cc_expiration_date",
+                                                      ["autocomplete"] = "cc-exp"
+                                                  })" />
+                                </MudItem>
+
+                                <MudItem xs="6">
+                                    <MudTextField T="string"
+                                                      Id="tlpy_cvv"
+                                                      Label="@(CardBrand == "amex" ? "Código de seguridad (CID)" : "Código verificación (CVV)")"
+                                                      Placeholder="@(CardBrand == "amex" ? "4 dígitos" : "3 dígitos")"
+                                                      @bind-Value="CVV"
+                                                      Immediate
+                                                      MaxLength="@CvvMaxLen"
+                                                      FullWidth Dense Margin="Margin.Dense"
+                                                      Variant="Variant.Outlined"
+                                                      InputType="InputType.Telephone"
+                                                      Validation="ValidateCVV"
+                                                      InputAttributes="@(new Dictionary<string, object> {
+                                                          ["name"] = "tlpy_cvv",
+                                                          ["autocomplete"] = "cc-csc",
+                                                          ["inputmode"] = "numeric"
+                                                      })" />
+
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
                 }
-            </div>
-        </div>
 
-        <div class="card-row">
-            <input type="text"
-                   id="tlpy_cc_expiration_date"
-                   name="tlpy_cc_expiration_date"
-                   placeholder="MM/YY"
-                   inputmode="numeric"
-                   autocomplete="cc-exp"
-                   maxlength="5"                                  
-            pattern="^(0[1-9]|1[0-2])\/\d{2}$"
-            title="Formato MM/YY. Mes entre 01 y 12"
-                       oninput="formatAndValidateExpiry(this)"
-                       onblur="formatAndValidateExpiry(this, true)" />
+                <!-- Datos SINPE -->
+                @if (SelectedPaymentMethod == SIMPE)
+                {
+                    <MudCard Class="mb-2">
+                        <MudCardContent>
+                            <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Datos de SINPE Móvil</MudText>
 
-                   
-            <input type="text" id="tlpy_cvv" name="tlpy_cvv"
-                   placeholder="CVV" inputmode="numeric" autocomplete="off"
-                   maxlength="3"
-                   minlength="3"
-                   pattern="[0-9]{3}"
-                   title="Debe ingresar exactamente 3 dígitos"
-                   oninput="this.value=this.value.replace(/[^0-9]/g,'').slice(0,3)" />
-        </div>
+                            <MudGrid Spacing="3">
+                                <MudItem xs="12" sm="6">
+                                    <MudTextField T="string"
+                                                  Label="Teléfono"
+                                                  Placeholder="8888-8888"
+                                                  @bind-Value="Phone"
+                                                  Immediate MaxLength="9"
+                                                  FullWidth Dense Margin="Margin.Dense"
+                                                  Variant="Variant.Outlined"
+                                                  InputType="InputType.Telephone"
+                                                  Validation="ValidatePhone"
+                                                  InputAttributes="PhoneInputAttrs" />
+                                </MudItem>
+
+                                <MudItem xs="12" sm="6">
+                                    <MudNumericField T="decimal?"
+                                                     @bind-Value="SinpeAmount"
+                                                     Label="Monto"
+                                                     Placeholder="0.00"
+                                                     Immediate Dense FullWidth
+                                                     Margin="Margin.Dense" Variant="Variant.Outlined"
+                                                     Adornment="Adornment.Start"
+                                                     AdornmentText="@(Currency?.ToUpper() == "USD" ? "$" : "₡")"
+                                                     DecimalPlaces="2" Min="0.01m" Step="0.01m"
+                                                     Required RequiredError="El monto es requerido"
+                                                     InputAttributes="@(new Dictionary<string, object> {
+                                                         ["id"] = "tlpy_amount",
+                                                         ["name"] = "tlpy_amount",
+                                                         ["inputmode"] = "decimal",
+                                                         ["autocomplete"] = "off"
+                                                     })" />
+                                </MudItem>
+
+                                <MudItem xs="12">
+                                    <MudTextField T="string"
+                                                  Label="Concepto"
+                                                  Placeholder="Pago"
+                                                  @bind-Value="SinpeRef"
+                                                  FullWidth Dense Margin="Margin.Dense"
+                                                  Variant="Variant.Outlined"
+                                                  Counter="50"
+                                                  Validation="ValidateConcept"
+                                                  InputAttributes="@(new Dictionary<string, object> {
+                                                      ["id"] = "tlpy_concept",
+                                                      ["name"] = "tlpy_concept",
+                                                      ["maxlength"] = "50"
+                                                  })" />
+                                </MudItem>
+                            </MudGrid>
+                        </MudCardContent>
+                    </MudCard>
+                }
+
+                <!-- Datos del propietario -->
+                <MudCard Class="mb-2">
+                    <MudCardContent>
+                        <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Datos del propietario</MudText>
+
+                        <MudGrid Spacing="3">
+                            <MudItem xs="12">
+                                <MudTextField T="string"
+                                              Label="Nombre"
+                                              Placeholder="Juan"
+                                              @bind-Value="BillToFirstName"
+                                              ReadOnly="@OwnerReadOnly"
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              InputAttributes="@(new Dictionary<string, object> {
+                                                  ["id"] = "billToFirstName",
+                                                  ["name"] = "billToFirstName"
+                                              })" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField T="string"
+                                              Label="Apellidos"
+                                              Placeholder="Perez Cedeño"
+                                              @bind-Value="BillToLastName"
+                                              ReadOnly="@OwnerReadOnly"
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              InputAttributes="@(new Dictionary<string, object> {
+                                                  ["id"] = "billToLastName",
+                                                  ["name"] = "billToLastName"
+                                              })" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTextField T="string"
+                                              Label="Cédula"
+                                              Placeholder="Solo números"
+                                              @bind-Value="CustomerId"
+                                              ReadOnly="@OwnerReadOnly"
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Telephone"
+                                              InputAttributes="CustomerIdInputAttrs" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTextField T="string"
+                                              Label="Teléfono"
+                                              Placeholder="8888-8888"
+                                              @bind-Value="BillToTelephone"
+                                              ReadOnly="@OwnerReadOnly"
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Telephone"
+                                              InputAttributes="BillToTelephoneInputAttrs" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField T="string"
+                                              Label="Correo electrónico"
+                                              Placeholder="correo@dominio.com"
+                                              @bind-Value="BillToEmail"
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              InputAttributes="@(new Dictionary<string, object> {
+                                                  ["id"] = "billToEmail",
+                                                  ["name"] = "billToEmail",
+                                                  ["type"] = "email"
+                                              })" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6" Class="mt-2">
+                                <MudSelect T="string"
+                                           Label="País"
+                                           @bind-Value="BillToCountry"
+                                           Dense FullWidth Margin="Margin.Normal"
+                                           Variant="Variant.Outlined"
+                                           InputAttributes="CountryAttrs">
+                                    <MudSelectItem T="string" Value="@("CR")">Costa Rica</MudSelectItem>
+                                    <MudSelectItem T="string" Value="@("PA")">Panamá</MudSelectItem>
+                                    <MudSelectItem T="string" Value="@("CO")">Colombia</MudSelectItem>
+                                </MudSelect>
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTextField T="string"
+                                              Label="Código postal"
+                                              Placeholder="@ZipPlaceholder"
+                                              @bind-Value="BillToZipPostCode"
+                                              Immediate MaxLength="10"
+                                              FullWidth Dense Margin="Margin.Normal"
+                                              Variant="Variant.Outlined"
+                                              InputType="InputType.Telephone"
+                                              Validation="ValidateZip"
+                                              InputAttributes="ZipAttrs" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTextField T="string"
+                                              Label="Ciudad"
+                                              Placeholder="Ej. SJO"
+                                              @bind-Value="BillToCity"
+                                              Immediate
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              Validation="ValidateCity"
+                                              InputAttributes="CityAttrs" />
+                            </MudItem>
+
+                            <MudItem xs="12" sm="6">
+                                <MudTextField T="string"
+                                              Label="Estado/Provincia"
+                                              Placeholder="Ej. SJO"
+                                              @bind-Value="BillToState"
+                                              Immediate
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              Validation="ValidateState"
+                                              InputAttributes="StateAttrs" />
+                            </MudItem>
+
+                            <MudItem xs="12">
+                                <MudTextField T="string"
+                                              Label="Dirección"
+                                              Placeholder="Calle 1, #123"
+                                              @bind-Value="BillToAddress"
+                                              Immediate
+                                              FullWidth Dense Margin="Margin.Dense"
+                                              Variant="Variant.Outlined"
+                                              Validation="ValidateAddress"
+                                              InputAttributes="Address1Attrs" />
+                            </MudItem>
+                        </MudGrid>
+                    </MudCardContent>
+                </MudCard>
+
+                <!-- Monto a cancelar (visual para tarjeta; en SINPE lo escribe el usuario) -->
+                @if (SelectedPaymentMethod == PAYFAC)
+                {
+                    <MudItem xs="12" Class="d-flex justify-center mt-4">
+                        <MudStack Row Bold AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="3">
+                            <MudText Typo="Typo.h6">Monto a cancelar</MudText>
+                            <MudText Typo="Typo.subtitle1" Bold>@PayLabel</MudText>
+                        </MudStack>
+                    </MudItem>
+                }
+
+            </MudItem>
+
+            <!-- Botón pagar -->
+            <MudItem xs="12" Class="d-flex justify-center mt-2">
+                <MudButton Id="btnPagar"
+                           Variant="Variant.Filled"
+                           Color="Color.Info"
+                           Disabled="@Pagando"
+                           OnClick="Pagar"
+                           Class="px-6 py-2">
+                    @(Pagando ? "Procesando…" : "Pagar")
+                </MudButton>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Hidden base que el SDK puede leer y que refresca Pagar() -->
+        <input type="hidden" id="orderNumber" name="orderNumber" value="@OrderNumber" />
+        <input type="hidden" id="amount"      name="amount"      value="@AmountString" />
+        <input type="hidden" id="currency"    name="currency"    value="@Currency" />
+        <input type="hidden" id="redirect"    name="redirect"    value="@RedirectUrl" />
+
+        <!-- Contenedor que el SDK usa para inyectar su HTML -->
+        <div id="responseTilopay" style="display:none"></div>
+
+        @if (!string.IsNullOrWhiteSpace(Estado))
+        {
+            <MudAlert Severity="Severity.Info" Class="mt-3">@Estado</MudAlert>
+        }
     </div>
-
-    <!-- DATOS DEL PROPIETARIO -->
-    <h4 class="section-title">Datos del propietario</h4>
-    <div class="box owner-form">
-        <div class="two-cols">
-            <input type="text" id="billToFirstName" name="billToFirstName" placeholder="Nombre" required pattern="^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,40}$"
-                   title="Solo letras y espacios (2 a 40 caracteres)" />
-            <input type="text" id="billToLastName" name="billToLastName" placeholder="Apellido" required
-                   pattern="^[A-Za-zÁÉÍÓÚáéíóúÑñ\s]{2,40}$"
-                   title="Solo letras y espacios (2 a 40 caracteres)" />
-        </div>
-        <input type="text" id="customerId" name="customerId" placeholder="Cédula" required
-               minlength="9" maxlength="12"
-               pattern="^\d{9,12}$"
-               title="Ingrese entre 9 y 12 dígitos (solo números)"
-               oninput="validateCedula(this)" />
-        <input type="text" id="billToTelephone" name="billToTelephone" placeholder="Teléfono" inputmode="numeric" required
-               maxlength="9" pattern="^\d{4}-?\d{4}$"
-               title="Formato ####-#### (8 dígitos)"
-               oninput="formatCRPhone(this)"  />
-        <input type="text" id="billToEmail" name="billToEmail" placeholder="Correo electrónico" required
-               title="Ingrese un correo válido (ej. nombre@gmail.com)"  />
-    </div>
-
-    <!-- MONTO A CANCELAR -->
-    <div class="amount-row">
-        <h4 class="section-title">Monto a cancelar</h4>
-        <strong>@PayLabel</strong>
-    </div>
-
-
-    <!-- INPUTS OCULTOS TILOPAY -->
-    <input type="hidden" id="orderNumber" name="orderNumber" value="@OrderNumber" />
-    <input type="hidden" id="amount" name="amount" value="@AmountString" />
-    <input type="hidden" id="currency" name="currency" value="@Currency" />
-    <input type="hidden" id="redirect" name="redirect" value="@RedirectUrl" />
-
-    <input type="hidden" id="billToAddress" name="billToAddress" value="123 Main Street" />
-    <input type="hidden" id="billToCity" name="billToCity" value="San José" />
-    <input type="hidden" id="billToCountry" name="billToCountry" value="CR" />
-    <input type="hidden" id="billToState" name="billToState" value="SJ" />
-    <input type="hidden" id="billToZipPostCode" name="billToZipPostCode" value="10101" />
-
-    <div id="responseTilopay"></div>
-
-    <!-- ACCIONES -->
-    <div class="actions">
-            <button type="button"
-                    id="btnPagar"
-                    class="btn btn-primary"
-                    @onclick="Pagar"
-                    disabled>
-                @(Pagando ? "Procesando…" : "Pagar")
-            </button>
-            <div id="validationMessage" style="color:red; margin-top:10px;"></div>
-
-    </div>
-
-    <div id="result"></div>
-
-    @if (!string.IsNullOrWhiteSpace(Estado))
-    {
-        <div class="status">@Estado</div>
-    }
-    </form>
-     </div>
-
+</MudContainer>
 
 <style>
-    :root {
-        --brand-blue: #0A66FF;
-       
-    }
+  /* el input necesita espacio a la derecha para los logos */
+  .cc-input-pad input,
+  .cc-input-pad .mud-input-input,
+  .cc-input-pad .mud-input-slot{
+    padding-right: 190px !important;   /* súbelo/bájalo según el ancho de tus logos */
+  }
 
+  /* si usas un contenedor para logos a la derecha, mantenlo absoluto */
+  .cc-brand{
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    pointer-events: none;
+  }
 
-    .pago-container {
-        max-width: 640px;
-        margin: 24px auto;
-        padding: 0 16px;
-    }
+  /* TAMAÑO de los íconos (forzado) */
+  .cc-logo{
+    height: 32px !important;       
+    display: inline-block;
+    filter: grayscale(1);
+    opacity: .28;
+    transition: filter .15s, opacity .15s, transform .15s;
+  }
 
+  .cc-logo.active{
+    filter: none;
+    opacity: 1;
+    transform: scale(1.05);
+  }
 
-    .tilo-title {
-        margin: 0 0 16px;
-        text-align: center;
-        font-weight: 800;
-        font-size: 1.75rem; 
-        color: var(--brand-blue, #0A66FF);
-    }
-
-    .section-title {
-        margin: 18px 0 8px;
-        font-weight: 300;
-        font-size: 1rem;
-        color: #374151;
-    }
-
-    .box {
-        background: #fff;
-        border: 1px solid #E5E7EB;
-        border-radius: 12px;
-        padding: 12px;
-    }
-
-        .card-form input, .owner-form input, .box select {
-            width: 100%;
-            height: 44px;
-            border: 1px solid #D1D5DB;
-            border-radius: 10px;
-            padding: 0 12px;
-            font-size: .95rem;
-            background: #fff;
-            outline: none;
-            transition: border-color .15s, box-shadow .15s;
-        }
-
-            .card-form input::placeholder, .owner-form input::placeholder {
-                color: #9CA3AF;
-            }
-
-            .card-form input:focus, .owner-form input:focus, .box select:focus {
-                border-color: var(--brand-blue);
-                box-shadow: 0 0 0 3px color-mix(in srgb, var(--brand-blue) 25%, transparent);
-            }
-
-    .card-row {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-top: 10px;
-    }
-
-    .two-cols {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 10px;
-        margin-bottom: 10px;
-    }
-
-    .owner-form input {
-        margin-top: 10px;
-    }
-
-    .w-100 {
-        width: 100%;
-    }
-
-
-    .amount-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        margin: 16px 0 8px;
-        color: #374151;
-    }
-
-        .amount-row strong {
-            font-size: 1.05rem;
-        }
-
-
-    .actions {
-        display: flex;
-        gap: 12px;
-        align-items: center;
-        justify-content: space-between;
-        margin-top: 16px;
-    }
-
-    .btn {
-        height: 46px;
-        border-radius: 12px;
-        padding: 0 18px;
-        font-weight: 700;
-        cursor: pointer;
-        text-decoration: none;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-    }
-
-    .btn-primary {
-        border: 0;
-        background: var(--brand-blue, #0A66FF);
-        color: #fff;
-        width: 100%;
-    }
-
-        .btn-primary:hover {
-            filter: brightness(1.05);
-        }
-
-        .btn-primary:disabled {
-            opacity: .6;
-            cursor: not-allowed;
-        }
-
-    .status {
-        margin-top: 14px;
-        border: 1px solid #E5E7EB;
-        background: #F8FAFC;
-        color: #334155;
-        padding: 10px 12px;
-        border-radius: 10px;
-    }
-
-    #tlpy_cc_number:not(:placeholder-shown):invalid {
-        border-color: #ef4444;
-        box-shadow: 0 0 0 3px rgba(239,68,68,.15);
-    }
-
-    #tlpy_cvv:not(:placeholder-shown):invalid {
-        border-color: #ef4444;
-        box-shadow: 0 0 0 3px rgba(239,68,68,.15);
-    }
-
-    #tlpy_cc_expiration_date:not(:placeholder-shown):invalid {
-        border-color: #ef4444;
-        box-shadow: 0 0 0 3px rgba(239,68,68,.15);
-    }
-
-    .cc-wrapper {
-        position: relative;
-        display: inline-block;
-        width: 100%;
-    }
-      .cc-wrapper input {
-            width: 100%;
-            padding-right: 50px; 
-        }
-
-
-    .cc-logo {
-        position: absolute;
-        top: 50%;
-        right: 10px;
-        transform: translateY(-50%);
-        display: flex;
-        align-items: center;
-        pointer-events: none; 
-    }
-
-        .cc-logo img {
-            height: 20px; 
-            display: block;
-        }
-</style>
-
-
-@code {
-
-    private string PayLabel => FormatPayLabel(Amount, Currency);
-
-    private static string FormatPayLabel(decimal amount, string? currency)
-    {
-        currency = currency?.ToUpperInvariant();
-        var symbol = currency switch
-        {
-            "CRC" => "₡",
-            "USD" => "$",
-            _ => (string.IsNullOrWhiteSpace(currency) ? "" : currency + " ")
-        };
-        var culture = currency switch
-        {
-            "CRC" => new System.Globalization.CultureInfo("es-CR"),
-            "USD" => new System.Globalization.CultureInfo("en-US"),
-            _ => System.Globalization.CultureInfo.InvariantCulture
-        };
-        return symbol + amount.ToString("N2", culture);
-    }
+  /* contenedor de logos (lo tenías así) */
+.cc-brand{
+  position:absolute;
+  right:12px;
+  top:50%;
+  transform:translateY(-50%);
+  display:flex;
+  align-items:center;
+  gap:12px;
+  pointer-events:none;
 }
 
-<script>
-    // ====== FECHA MM/YY ======
-    window.formatAndValidateExpiry = function (el) {
-      let v = el.value.replace(/\D/g, '').slice(0, 4); // solo dígitos, máx 4
 
-      if (v.length === 0) { el.value = ''; el.setCustomValidity('Fecha inválida.'); return; }
+.cc-brand{ 
+  top: calc(50% - 2px);       
 
-      if (v.length === 1) {
-        if (parseInt(v,10) > 1) v = '0' + v; // permite teclear 0 para 01..09
-        el.value = v;
-        el.setCustomValidity('Fecha inválida.');
-        return;
-      }
+.mud-input-error .cc-brand{
+  top: calc(50% - 4px);       
 
-      // ya hay 2 dígitos -> normaliza mes
-      let mm = v.slice(0,2);
-      if (mm === '00') mm = '01';
-      let m = parseInt(mm,10);
-      if (m < 1) m = 1;
-      if (m > 12) m = 12;
-      mm = m.toString().padStart(2,'0');
 
-      const yy = v.slice(2,4);
-      el.value = mm + (yy ? '/' + yy : '');
+</style>
 
-      // valida completo solo si hay MM/YY
-      let ok = false;
-      if (yy.length === 2) {
-        const now = new Date();
-        const curYY = now.getFullYear() % 100;
-        const curMM = now.getMonth() + 1;
-        ok = (m >= 1 && m <= 12) && (parseInt(yy,10) > curYY || (parseInt(yy,10) === curYY && m >= curMM));
-      }
-      el.setCustomValidity(ok ? '' : 'Fecha inválida.');
-    };
-
-    // ====== TELÉFONO CR ####-#### ======
-    window.formatCRPhone = function(el){
-      let d = el.value.replace(/\D/g,'').slice(0,8);
-      el.value = d.length > 4 ? d.slice(0,4) + '-' + d.slice(4) : d;
-      el.setCustomValidity(/^\d{4}-?\d{4}$/.test(el.value) ? '' : 'Teléfono inválido (use ####-####)');
-    };
-
-    // ====== CÉDULA 9-12 dígitos ======
-    window.validateCedula = function(el){
-      el.value = el.value.replace(/\D/g,'').slice(0,12);
-      el.setCustomValidity(/^\d{9,12}$/.test(el.value) ? '' : 'La cédula debe tener entre 9 y 12 dígitos');
-    };
-
-    // ====== VALIDACIÓN GLOBAL + TOGGLE DEL BOTÓN ======
-    (function(){
-      const requiredIds = [
-        "billToFirstName","billToLastName","customerId",
-        "billToTelephone","billToEmail",
-        "tlpy_cc_number","tlpy_cc_expiration_date","tlpy_cvv"
-      ];
-
-      function togglePay(){
-        const btn = document.getElementById("btnPagar");
-        let allValid = true;
-        for (const id of requiredIds){
-          const el = document.getElementById(id);
-          if(!el || !el.value.trim() || !el.checkValidity()){ allValid = false; break; }
-        }
-        if (btn) btn.disabled = !allValid;
-      }
-
-      // función para usar desde C# antes de pagar
-      window.validatePayForm = function(){
-        const form = document.getElementById('payFormTilopay');
-        const msg  = document.getElementById('validationMessage');
-        if (!form) return false;
-
-        const ok = form.checkValidity();
-        if (!ok){
-          form.reportValidity();
-          if (msg) msg.textContent = "Debes completar todos los campos antes de continuar.";
-          return false;
-        }
-        if (msg) msg.textContent = "";
-        return true;
-      };
-
-      window.addEventListener('input', togglePay);
-      window.addEventListener('change', togglePay);
-      setTimeout(togglePay, 0); // primer chequeo
-    })();
-</script>

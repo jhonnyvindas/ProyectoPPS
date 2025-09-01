@@ -1,4 +1,4 @@
-﻿
+﻿// wwwroot/js/tilopayInterop.js
 window.tilopayInterop = (function () {
     let _inited = false;
     let _busy = false;
@@ -13,6 +13,20 @@ window.tilopayInterop = (function () {
     function ensureDom() {
         const root = document.querySelector(".payFormTilopay");
         require(root, "No existe .payFormTilopay en el DOM");
+    }
+
+    // --- NUEVO: el SDK inyecta HTML en #responseTilopay; si no existe lo creamos ---
+    function ensureResponseContainer() {
+        let c = document.getElementById("responseTilopay");
+        if (!c) {
+            c = document.createElement("div");
+            c.id = "responseTilopay";
+            c.style.display = "none";
+            // lo ponemos al final del body; sirve igual dentro del wrapper
+            document.body.appendChild(c);
+            console.log("[tilopayInterop] #responseTilopay creado");
+        }
+        return c;
     }
 
     async function maybeCancel() {
@@ -30,11 +44,15 @@ window.tilopayInterop = (function () {
         } catch { }
     }
 
-
+    // ------------------ INIT UNA SOLA VEZ ------------------
     async function ensureInit(token, options, dotnetRef) {
         ensureSdk();
         require(!!token, "Token vacío para Init");
         ensureDom();
+        ensureResponseContainer();
+
+        // **IMPORTANTE**: conserva o actualiza la referencia .NET aunque ya esté inicializado
+        if (dotnetRef) _dotnetRef = dotnetRef;
 
         if (_inited) {
             if (options && typeof window.Tilopay?.updateOptions === "function") {
@@ -43,7 +61,6 @@ window.tilopayInterop = (function () {
             return true;
         }
 
-        _dotnetRef = dotnetRef || null;
         const cfg = Object.assign({}, options || {}, { token });
 
         console.log("[tilopayInterop] Init cfg:", cfg);
@@ -76,10 +93,59 @@ window.tilopayInterop = (function () {
         if (cards && cards.closest(".row")) cards.closest(".row").style.display = "none";
     }
 
+    // ------------------ Marca de tarjeta con el SDK ------------------
+    async function getCardType() {
+        try {
+            ensureSdk();
+            if (typeof window.Tilopay.getCardType !== "function")
+                return "";
+            const r = await window.Tilopay.getCardType();
+            return (r?.message || r || "").toString().toLowerCase();
+        } catch {
+            return ""; // sin console.error
+        }
+    }
+
+
+    function watchCardBrand(dotnetRef) {
+        const ref = dotnetRef || _dotnetRef;
+
+        const attach = () => {
+            const input = document.getElementById("tlpy_cc_number");
+            if (!input) { setTimeout(attach, 150); return; }
+
+            // evita duplicados
+            if (input._tlpyBrandHandler) {
+                input.removeEventListener("input", input._tlpyBrandHandler);
+                input.removeEventListener("change", input._tlpyBrandHandler);
+                input.removeEventListener("blur", input._tlpyBrandHandler);
+            }
+
+            const handler = async () => {
+                try {
+                    const brand = await getCardType();
+                    if (ref) await ref.invokeMethodAsync("OnCardBrandChanged", brand || "");
+                } catch { /* no-op */ }
+            };
+
+            input._tlpyBrandHandler = handler;
+            input.addEventListener("input", handler);
+            input.addEventListener("change", handler);
+            input.addEventListener("blur", handler);
+
+            // primera detección inmediata
+            handler();
+        };
+
+        attach();
+    }
+
+    // ------------------ PAY ------------------
     async function prepareAndPay() {
         ensureSdk();
         require(_inited, "SDK no inicializado; llama a ensureInit primero.");
         ensureDom();
+        ensureResponseContainer();
 
         if (_busy) {
             console.warn("[tilopayInterop] ya hay un pago en proceso; ignorando.");
@@ -87,8 +153,9 @@ window.tilopayInterop = (function () {
         }
         _busy = true;
 
-
         try {
+            //await maybeCancel();
+
             console.log("[tilopayInterop] startPayment()");
             const result = await window.Tilopay.startPayment();
 
@@ -104,63 +171,12 @@ window.tilopayInterop = (function () {
         }
     }
 
-    async function getCardTypeOnce() {
-
-        try {
-            if (window.Tilopay && typeof window.Tilopay.getCardType === "function") {
-                const res = await window.Tilopay.getCardType();
-                const val = (typeof res === "string") ? res : (res?.message || res?.type || "");
-                if (val) return String(val).toLowerCase();
-            }
-        } catch (e) {
-            console.warn("[tilopayInterop] getCardTypeOnce SDK error:", e);
-        }
-
-
-        const el = document.querySelector("#tlpy_cc_number");
-        const raw = (el?.value || "").replace(/\s+/g, "");
-        if (!raw) return "";
-
-
-        if (/^4\d{6,}$/.test(raw)) return "visa";
-        if (/^(5[1-5]\d{4,}|2(2[2-9]\d{3}|2[3-9]\d{4}|[3-6]\d{5}|7[01]\d{4}|720\d{3}))\d*$/.test(raw)) return "mastercard";
-        if (/^3[47]\d{5,}$/.test(raw)) return "amex";
-
-        return "";
-    }
-
-    function watchCardType(selector, dotnetRef, methodName) {
-        require(!!selector, "Selector vacío");
-        const el = document.querySelector(selector);
-        require(!!el, `No se encontró ${selector}`);
-
-        let t = null;
-        const trigger = () => {
-            clearTimeout(t);
-            t = setTimeout(async () => {
-                const brand = await getCardTypeOnce();
-                if (dotnetRef && methodName) {
-                    try { await dotnetRef.invokeMethodAsync(methodName, brand); } catch { }
-                }
-            }, 100);
-        };
-
-        el.addEventListener("input", trigger);
-        el.addEventListener("change", trigger);
-        el.addEventListener("paste", trigger);
-        el.addEventListener("keyup", trigger);
-
-
-        trigger();
-
-    }
     return {
         ensureInit,
         prepareAndPay,
         hideMethodAndCards,
         setDefaultMethod,
-        getCardTypeOnce,
-        watchCardType
-
+        getCardType,
+        watchCardBrand
     };
 })();

@@ -11,11 +11,15 @@
     <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.DevServer" Version="8.0.18" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="8.0.1" />
     <PackageReference Include="MudBlazor" Version="8.11.0" />
-    <PackageReference Include="Syncfusion.Blazor" Version="30.2.6" />
+    <PackageReference Include="Syncfusion.Blazor" Version="30.2.7" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\Shared\PasarelaPago.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="wwwroot\img\" />
   </ItemGroup>
 
 </Project>

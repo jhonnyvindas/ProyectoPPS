@@ -19,7 +19,7 @@ builder.Services.AddScoped(sp => sp.GetRequiredService<IHttpClientFactory>().Cre
 // HttpClient default del WASM (ya suele existir)
 builder.Services.AddScoped(sp => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 
-
+// Servicio para tu API del Server
 builder.Services.AddScoped<PasarelaPago.Client.Services.TilopayApi>();
 
 builder.Services.AddMudServices();

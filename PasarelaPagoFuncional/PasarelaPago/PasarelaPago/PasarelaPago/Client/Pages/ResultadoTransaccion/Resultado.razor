@@ -1,0 +1,115 @@
+﻿@page "/pagos/resultado"
+@namespace PasarelaPago.Client.Pages.ResultadoTransaccion
+@using MudBlazor
+
+<MudContainer MaxWidth="MaxWidth.Medium" Class="mx-auto mt-6">
+
+    @if (Loading)
+    {
+        <MudSkeleton Height="60px" Class="mb-4" />
+        <MudSkeleton Height="220px" />
+    }
+    else
+    {
+        <!-- Banda de estado -->
+        <div class="banner @BannerCss">
+            <MudIcon Icon="@BannerIcon" Size="Size.Large" Class="mr-2" />
+            <MudText Typo="Typo.h5" Class="m-0">@BannerText</MudText>
+        </div>
+
+        <!-- “Comprobante” -->
+        <MudCard Class="mt-3 shadow-sm">
+            <MudCardContent Class="p-4">
+                <MudGrid Spacing="2">
+                    @if (!string.IsNullOrWhiteSpace(Result.Customer))
+                    {
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1" Class="font-bold">Cliente</MudText>
+                            <MudText>@Result.Customer</MudText>
+                        </MudItem>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(Result.Email))
+                    {
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.subtitle1" Class="font-bold">Correo</MudText>
+                            <MudText>@Result.Email</MudText>
+                        </MudItem>
+                    }
+
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.subtitle1" Class="font-bold">Descripción</MudText>
+                        <MudText>@(Result.Description ?? "-")</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.subtitle1" Class="font-bold">Autorización</MudText>
+                        <MudText>@(Result.Auth ?? "-")</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.subtitle1" Class="font-bold">Marca</MudText>
+                        <MudText>@FormatBrand(Result.Brand, Result.Last4)</MudText>
+                    </MudItem>
+
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.subtitle1" Class="font-bold">Orden</MudText>
+                        <MudText>@(Result.Order ?? "-")</MudText>
+                    </MudItem>
+
+                    @if (!string.IsNullOrWhiteSpace(Result.TilopayTx))
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle1" Class="font-bold">Id Tilopay</MudText>
+                            <MudText>@Result.TilopayTx</MudText>
+                        </MudItem>
+                    }
+
+                    @if (!string.IsNullOrWhiteSpace(Result.AmountLabel))
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle1" Class="font-bold">Monto</MudText>
+                            <MudText>@Result.AmountLabel</MudText>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudCardContent>
+
+            <MudCardActions Class="px-4 pb-4">
+                <MudSpacer />
+                <MudButton Variant="Variant.Filled" Color="Color.Info" OnClick="VolverInicio">
+                    VOLVER AL INICIO
+                </MudButton>
+            </MudCardActions>
+        </MudCard>
+    }
+</MudContainer>
+
+@code {
+    // Todo el estado y la lógica están en el code-behind (Resultado.razor.cs)
+}
+<style>
+    .banner {
+        display: flex;
+        align-items: center;
+        border-radius: 10px;
+        padding: 14px 16px;
+        color: #fff;
+    }
+
+    .banner-success {
+        background: #08c25e;
+    }
+
+    .banner-warning {
+        background: #f59e0b;
+    }
+
+    .banner-error {
+        background: #ef4444;
+    }
+
+    .font-bold {
+        font-weight: 700;
+    }
+</style>
