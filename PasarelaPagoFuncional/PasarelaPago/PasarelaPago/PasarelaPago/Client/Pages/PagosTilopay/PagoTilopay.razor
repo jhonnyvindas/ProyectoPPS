@@ -47,23 +47,23 @@
                             <MudGrid Spacing="3">
                                 <MudItem xs="12">
                                     <MudStack Class="cc-wrapper" Style="position:relative;">
-                                        <MudTextField T="string"
-                                                  Id="tlpy_cc_number"
-                                                  Label="Número de tarjeta"
-                                                  Placeholder="1234 5678 9012 3456"
-                                                  @bind-Value="CardNumber"
-                                                  Immediate
-                                                  MaxLength="@CardNumberMaxChars"   
-                                                  FullWidth Dense Margin="Margin.Dense"
-                                                  Variant="Variant.Outlined"
-                                                  InputType="InputType.Telephone"
-                                                  Validation="ValidateCardNumber"
-                                                  InputClass="cc-input-pad"
-                                                  InputAttributes="@(new Dictionary<string, object> {
-                                                      ["name"] = "tlpy_cc_number",
-                                                      ["inputmode"] = "numeric",
-                                                      ["autocomplete"] = "cc-number"
-                                                  })" />
+                                       <MudTextField T="string"
+                                                    Label="Número de tarjeta"
+                                                    Id="tlpy_cc_number"
+                                                    @bind-Value="CardNumber"
+                                                    Immediate
+                                                    MaxLength="@CardNumberMaxChars"
+                                                    FullWidth Dense Margin="Margin.Dense"
+                                                    Variant="Variant.Outlined"
+                                                    InputType="InputType.Telephone"
+                                                    Validation="ValidateCardNumber"
+                                                    InputClass="cc-input-pad"
+                                                    InputAttributes="@(new Dictionary<string, object> {       
+                                                        ["name"] = "cc_number",
+                                                        ["inputmode"] = "numeric",
+                                                        ["autocomplete"] = "cc-number"
+                                                    })" />
+
 
                                         <MudStack Row="true"
                                                   AlignItems="AlignItems.Center"
@@ -415,12 +415,10 @@
 }
 
 
-.cc-brand{ 
-  top: calc(50% - 2px);       
-
-.mud-input-error .cc-brand{
-  top: calc(50% - 4px);       
-
+.cc-brand{ top: calc(50% - 2px); }
+.mud-input-error .cc-brand{ top: calc(50% - 4px); }
+  
+  
 
 </style>
 

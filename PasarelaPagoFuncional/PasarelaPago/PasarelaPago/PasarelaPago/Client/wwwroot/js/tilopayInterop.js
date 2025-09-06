@@ -111,10 +111,10 @@ window.tilopayInterop = (function () {
         const ref = dotnetRef || _dotnetRef;
 
         const attach = () => {
-            const input = document.getElementById("tlpy_cc_number");
+            const input = document.getElementById("tlpy_cc_number")
+                || document.querySelector('input[name="tlpy_cc_number"]');
             if (!input) { setTimeout(attach, 150); return; }
 
-            // evita duplicados
             if (input._tlpyBrandHandler) {
                 input.removeEventListener("input", input._tlpyBrandHandler);
                 input.removeEventListener("change", input._tlpyBrandHandler);
@@ -123,8 +123,15 @@ window.tilopayInterop = (function () {
 
             const handler = async () => {
                 try {
-                    const brand = await getCardType();
-                    if (ref) await ref.invokeMethodAsync("OnCardBrandChanged", brand || "");
+                    ensureSdk();
+                    if (typeof window.Tilopay.getCardType !== "function") return;
+                    const r = await window.Tilopay.getCardType();
+
+                    // Soporta formatos distintos del SDK sin heurística local
+                    const brand = (r && (r.message || r.cardType || r.type || r.result || r) || "")
+                        .toString().toLowerCase();
+
+                    if (ref) await ref.invokeMethodAsync("OnCardBrandChanged", brand);
                 } catch { /* no-op */ }
             };
 
@@ -133,12 +140,12 @@ window.tilopayInterop = (function () {
             input.addEventListener("change", handler);
             input.addEventListener("blur", handler);
 
-            // primera detección inmediata
-            handler();
+            handler(); // primera detección
         };
 
         attach();
     }
+
 
     // ------------------ PAY ------------------
     async function prepareAndPay() {

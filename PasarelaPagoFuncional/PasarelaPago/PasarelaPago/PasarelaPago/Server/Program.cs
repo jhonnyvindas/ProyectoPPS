@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.EntityFrameworkCore;
+using PasarelaPago.Server.Data;
+using PasarelaPago.Server.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Registra compresión incluyendo el MIME WS-proxy
 builder.Services.AddResponseCompression(options =>
 {
     options.MimeTypes = ResponseCompressionDefaults.MimeTypes
@@ -24,8 +26,10 @@ builder.Services.AddCors(opt =>
     );
 });
 
-//  Force URLs fijos si no lo has hecho:
-// builder.WebHost.UseUrls("https://localhost:7295", "http://localhost:5203");
+builder.Services.AddDbContext<TilopayDbContext>(options =>
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<TransaccionService>();
 
 var app = builder.Build();
 
@@ -41,7 +45,6 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
-// Middleware de compresión antes de servir Blazor
 app.UseResponseCompression();
 
 app.UseBlazorFrameworkFiles();

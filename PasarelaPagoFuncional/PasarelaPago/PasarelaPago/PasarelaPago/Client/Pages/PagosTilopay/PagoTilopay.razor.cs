@@ -1,9 +1,12 @@
 ﻿using System.Globalization;
-using System.Linq;                         // ← NUEVO (Where, etc.)
-using System.Collections.Generic;          // ← NUEVO (Dictionary)
+using System.Linq;
+using System.Collections.Generic;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using PasarelaPago.Client.Services;
+using System.Net.Http.Json; // <-- NUEVO
+using PasarelaPago.Shared.Models;
+using PasarelaPago.Shared.Dtos; // <-- NUEVO
 
 namespace PasarelaPago.Client.Pages.PagosTilopay;
 
@@ -13,6 +16,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     [Inject] protected TilopayApi Api { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
     [Inject] protected NavigationManager Nav { get; set; } = default!;
+    [Inject] protected HttpClient Http { get; set; } = default!; // <-- CAMBIO
 
     // -------- Constantes Tilopay (métodos) --------
     public const string PAYFAC = "12:3:88802749:payfac:0:";
@@ -39,13 +43,13 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public string? BillToTelephone { get; set; }
     public string? BillToEmail { get; set; } = "demo@example.com";
     public string? BillToCountry { get; set; } = "CR";
-    public string? BillToZipPostCode { get; set; }           // ok sin valor por defecto
+    public string? BillToZipPostCode { get; set; }
     public string? BillToCity { get; set; } = "San José";
     public string? BillToState { get; set; } = "SJ";
     public string? BillToAddress { get; set; } = "123 Main Street";
 
     // Marca de tarjeta (desde el SDK)
-    public string? CardBrand { get; set; }           // "visa" | "mastercard" | "amex"
+    public string? CardBrand { get; set; }
     public int CvvMaxLen => CardBrand == "amex" ? 4 : 3;
     public int CardNumberMaxLen => CardBrand == "amex" ? 15 : 19;
 
@@ -66,7 +70,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     private string _orderNumber = Guid.NewGuid().ToString("N");
     public string OrderNumber => _orderNumber;
 
-    public decimal Amount { get; set; } = 1.00m;   // total para Tarjeta
+    public decimal Amount { get; set; } = 1.00m;
     public string Currency { get; set; } = "USD";
     public string AmountString => Amount.ToString("F2", CultureInfo.InvariantCulture);
     private bool _sdkReady;
@@ -169,8 +173,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             {
                 var preOptions = new
                 {
-                    orderNumber = OrderNumber,              // cualquiera; el real lo regeneras en Pagar()
-                    amount = AmountString,             // no dispara cobro
+                    orderNumber = OrderNumber,
+                    amount = AmountString,
                     currency = Currency,
                     description = "preinit",
                     language = "es",
@@ -188,6 +192,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         await JS.InvokeVoidAsync("tilopayInterop.watchCardBrand", _selfRef);
     }
 
+
     public async ValueTask DisposeAsync()
     {
         _selfRef?.Dispose();
@@ -203,7 +208,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return $"{scheme}://{host}{port}{path}";
     }
 
-
     public string? ValidateExpiry(string? v)
     {
         if (string.IsNullOrWhiteSpace(v)) return "Fecha requerida";
@@ -215,17 +219,20 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         var ok = (yy > curYY) || (yy == curYY && mm >= curMM);
         return ok ? null : "Tarjeta vencida";
     }
+
     public string? ValidateCVV(string? v)
     {
         var digits = new string((v ?? "").Where(char.IsDigit).ToArray());
         return digits.Length == CvvMaxLen ? null : $"CVV de {CvvMaxLen} dígitos";
     }
+
     public string? ValidatePhone(string? v)
     {
         if (string.IsNullOrWhiteSpace(v)) return "Teléfono requerido";
         var d = new string(v.Where(char.IsDigit).ToArray());
         return d.Length == 8 ? null : "Use formato ####-####";
     }
+
     public string? ValidateConcept(string? v) => string.IsNullOrWhiteSpace(v) || v.Trim().Length < 3 ? "Mínimo 3 caracteres" : null;
     public string? ValidateZip(string? v) => string.IsNullOrWhiteSpace(v) ? "Requerido" : null;
     public string? ValidateCity(string? v) => string.IsNullOrWhiteSpace(v) ? "Requerido" : null;
@@ -235,9 +242,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public string ZipPlaceholder =>
         (BillToCountry ?? "CR").ToUpperInvariant() switch
         {
-            "CR" => "10101",   // Costa Rica
-            "PA" => "0801",    // Panamá (ejemplo)
-            "CO" => "110111",  // Colombia (ejemplo)
+            "CR" => "10101",
+            "PA" => "0801",
+            "CO" => "110111",
             _ => "Código postal"
         };
 
@@ -262,9 +269,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 return;
             }
 
-            // Monto a enviar al SDK:
-            //  - PAYFAC: usamos Amount (con hidden name="amount")
-            //  - SIMPE : usa el input name="tlpy_amount", pero enviamos por seguridad también en options
             var amountToPay = SelectedPaymentMethod == PAYFAC
                 ? Amount
                 : (SinpeAmount ?? 0m);
@@ -275,14 +279,12 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 return;
             }
 
-            // Regenerar order number por transacción
             _orderNumber = Guid.NewGuid().ToString("N");
-            StateHasChanged(); // refresca los inputs hidden
+            StateHasChanged();
 
             Estado = "Inicializando SDK…";
             StateHasChanged();
 
-            // Opciones del SDK/checkout
             var options = new
             {
                 orderNumber = _orderNumber,
@@ -292,8 +294,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 language = "es",
                 capture = "1",
                 redirect = RedirectUrl,
-
-                // Billing
                 billToEmail = BillToEmail,
                 billToFirstName = BillToFirstName,
                 billToLastName = BillToLastName,
@@ -303,25 +303,19 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 billToState = BillToState,
                 billToZipPostCode = BillToZipPostCode,
                 billToTelephone = BillToTelephone,
-
-                // Extras Tilopay
                 subscription = 0,
                 hashVersion = "V2",
-
-                // Para que el SDK identifique el método (además del hidden tlpy_payment_method)
                 paymentMethod = SelectedPaymentMethod
             };
 
-            // Inicializa (carga sdk si hace falta y engancha callbacks)
             await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, options, _selfRef);
 
-            // (Opcional) última lectura de marca desde el SDK antes de pagar
             try
             {
                 var brand = await JS.InvokeAsync<string>("tilopayInterop.getCardType");
                 if (!string.IsNullOrWhiteSpace(brand))
                 {
-                    CardBrand = brand.ToLowerInvariant(); // "visa" | "mastercard" | "amex"
+                    CardBrand = brand.ToLowerInvariant();
                     StateHasChanged();
                 }
             }
@@ -351,26 +345,67 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     // -------- Callback desde JS --------
     [JSInvokable]
-    public Task OnPaymentEvent(PaymentEvent evt)
+    public async Task OnPaymentEvent(PaymentEvent evt)
     {
         var status = (evt?.status ?? "").ToLowerInvariant();
-        Estado = status switch
+
+        if (status == "success" || status == "approved" || status == "ok" || status == "completed")
         {
-            "success" or "approved" or "ok" or "completed" => "Pago aprobado",
-            "error" or "failed" or "denied" or "declined" => $"Pago rechazado: {evt?.payload}",
-            _ => $"Resultado: {evt?.status} {evt?.payload}"
-        };
+            var cliente = new Cliente
+            {
+                nombre = BillToFirstName,
+                apellido = BillToLastName,
+                correo = BillToEmail,
+                telefono = BillToTelephone,
+                direccion = BillToAddress,
+                ciudad = BillToCity,
+                provincia = BillToState,
+                codigoPostal = BillToZipPostCode,
+                pais = BillToCountry
+            };
+            var pago = new Pago
+            {
+                numeroOrden = _orderNumber,
+                metodoPago = SelectedPaymentMethod,
+                monto = (SelectedPaymentMethod == PAYFAC) ? Amount : SinpeAmount,
+                moneda = Currency,
+                estadoTilopay = status,
+                datosRespuestaTilopay = evt?.payload?.ToString(),
+                fechaTransaccion = DateTime.UtcNow,
+                marcaTarjeta = CardBrand
+            };
+
+            var payload = new PagoConCliente { Cliente = cliente, Pago = pago };
+            try
+            {
+                // CAMBIO: Llama al controlador API del servidor
+                await Http.PostAsJsonAsync("Transaccion", payload);
+                Estado = "Pago aprobado. Datos guardados.";
+            }
+            catch (Exception ex)
+            {
+                // Manejar error si la llamada API falla
+                Estado = $"Error al guardar datos: {ex.Message}";
+            }
+        }
+        else
+        {
+            Estado = $"Pago rechazado: {evt?.payload}";
+        }
         StateHasChanged();
-        return Task.CompletedTask;
     }
 
     [JSInvokable]
-    public Task OnCardBrandChanged(string? brand)
+    public Task OnCardBrandChanged(string brand)
     {
         CardBrand = (brand ?? "").ToLowerInvariant();
         StateHasChanged();
         return Task.CompletedTask;
     }
+
+
+
+    // ... Resto de tu código ...
 
     public sealed class PaymentEvent
     {
@@ -379,7 +414,5 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     }
 
     public string CardClass(string brand) =>
-    string.Equals(CardBrand, brand, StringComparison.OrdinalIgnoreCase) ? "active" : "";
-
+        string.Equals(CardBrand, brand, StringComparison.OrdinalIgnoreCase) ? "active" : "";
 }
-
