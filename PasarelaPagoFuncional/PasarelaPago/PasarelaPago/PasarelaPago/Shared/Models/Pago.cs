@@ -1,20 +1,37 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PasarelaPago.Shared.Models;
 
-[Table("Clientes")]
-public class Cliente
+[Table("Pagos")]
+public class Pago
 {
     [Key]
+    public int pagoId { get; set; }
+
+    [Required, MaxLength(64)]
+    public string numeroOrden { get; set; } = default!;
+
+    [Required]
     public int clienteId { get; set; }
-    public string? nombre { get; set; }
-    public string? apellido { get; set; }
-    public string? correo { get; set; }
-    public string? telefono { get; set; }
-    public string? direccion { get; set; }
-    public string? ciudad { get; set; }
-    public string? provincia { get; set; }
-    public string? codigoPostal { get; set; }
-    public string? pais { get; set; }
+
+    [MaxLength(32)]
+    public string? metodoPago { get; set; }
+
+    [Column(TypeName = "decimal(10,2)")]
+    public decimal monto { get; set; }
+
+    [MaxLength(5)]
+    public string? moneda { get; set; }
+
+    [MaxLength(50)]
+    public string? estadoTilopay { get; set; }
+
+    public string? datosRespuestaTilopay { get; set; }
+
+    public DateTime fechaTransaccion { get; set; }
+
+    [MaxLength(16)]
+    public string? marcaTarjeta { get; set; }
 }

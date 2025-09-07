@@ -5,6 +5,9 @@ using PasarelaPago.Server.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
+var cs = builder.Configuration.GetConnectionString("DefaultConnection");
+Console.WriteLine($"[DB] ConnectionString: {(string.IsNullOrWhiteSpace(cs) ? "(null/empty)" : cs)}");
+
 builder.Services.AddResponseCompression(options =>
 {
     options.MimeTypes = ResponseCompressionDefaults.MimeTypes
@@ -28,6 +31,7 @@ builder.Services.AddCors(opt =>
 
 builder.Services.AddDbContext<TilopayDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
 
 builder.Services.AddScoped<TransaccionService>();
 

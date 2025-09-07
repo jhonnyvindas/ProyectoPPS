@@ -1,22 +1,24 @@
 ﻿using Microsoft.AspNetCore.Mvc;
-using PasarelaPago.Shared.Dtos; 
-using PasarelaPago.Server.Services; 
+using PasarelaPago.Server.Services;
+using PasarelaPago.Shared.Dtos;
+
+namespace PasarelaPago.Server.Controllers;
 
 [ApiController]
-[Route("[controller]")]
+[Route("api/[controller]")]
 public class TransaccionController : ControllerBase
 {
-    private readonly TransaccionService _transaccionService;
+    private readonly TransaccionService _service;
 
-    public TransaccionController(TransaccionService transaccionService)
-    {
-        _transaccionService = transaccionService;
-    }
+    public TransaccionController(TransaccionService service) => _service = service;
 
     [HttpPost]
-    public async Task<IActionResult> Post([FromBody] PagoConCliente pagoConCliente)
+    public async Task<IActionResult> Post([FromBody] PagoConCliente dto)
     {
-        await _transaccionService.GuardarTransaccionAsync(pagoConCliente.Cliente, pagoConCliente.Pago);
-        return Ok();
+        if (dto is null || dto.Cliente is null || dto.Pago is null)
+            return BadRequest("Payload inválido.");
+
+        await _service.GuardarTransaccionAsync(dto.Cliente, dto.Pago);
+        return Ok(new { ok = true });
     }
 }
