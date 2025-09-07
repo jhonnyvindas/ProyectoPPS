@@ -58,7 +58,8 @@
                                                     InputType="InputType.Telephone"
                                                     Validation="ValidateCardNumber"
                                                     InputClass="cc-input-pad"
-                                                    InputAttributes="@(new Dictionary<string, object> {       
+                                                    InputAttributes="@(new Dictionary<string, object> {   
+                                                        ["id"] = "tlpy_cc_number",
                                                         ["name"] = "cc_number",
                                                         ["inputmode"] = "numeric",
                                                         ["autocomplete"] = "cc-number"

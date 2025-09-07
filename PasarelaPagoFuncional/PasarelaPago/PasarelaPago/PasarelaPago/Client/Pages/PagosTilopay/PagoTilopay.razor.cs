@@ -180,11 +180,11 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                     description = "preinit",
                     language = "es",
                     capture = "1",
-                    redirect = RedirectUrl
+                    redirect = RedirectUrl,
+                    paymentMethod = PAYFAC     // <── clave para el pre-init
                 };
-
                 await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, preOptions, _selfRef);
-                _sdkReady = true;
+                await JS.InvokeVoidAsync("tilopayInterop.watchCardBrand", _selfRef);
             }
         }
         catch { /* si falla, sólo no habrá detección de marca */ }
@@ -421,10 +421,10 @@ public async Task OnPaymentEvent(PaymentEvent evt)
 }
 
 
-[JSInvokable]
+    [JSInvokable]
     public Task OnCardBrandChanged(string brand)
     {
-        CardBrand = (brand ?? "").ToLowerInvariant();
+        CardBrand = string.IsNullOrWhiteSpace(brand) ? null : brand.ToLowerInvariant();
         StateHasChanged();
         return Task.CompletedTask;
     }

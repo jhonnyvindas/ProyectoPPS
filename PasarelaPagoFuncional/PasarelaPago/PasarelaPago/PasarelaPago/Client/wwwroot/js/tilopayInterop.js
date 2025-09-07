@@ -106,19 +106,27 @@ window.tilopayInterop = (function () {
         }
     }
 
-
+    // wwwroot/js/tilopayInterop.js
     function watchCardBrand(dotnetRef) {
         const ref = dotnetRef || _dotnetRef;
 
-        const attach = () => {
-            const input = document.getElementById("tlpy_cc_number")
-                || document.querySelector('input[name="tlpy_cc_number"]');
-            if (!input) { setTimeout(attach, 150); return; }
+        let currentInput = null;
+        let bound = false;
 
-            if (input._tlpyBrandHandler) {
-                input.removeEventListener("input", input._tlpyBrandHandler);
-                input.removeEventListener("change", input._tlpyBrandHandler);
-                input.removeEventListener("blur", input._tlpyBrandHandler);
+        const bind = () => {
+            const el = document.getElementById("tlpy_cc_number")
+                || document.querySelector('input[name="cc_number"]')
+                || document.querySelector('input[name="tlpy_cc_number"]');
+
+            if (!el) return;
+
+            if (currentInput === el && bound) return; // ya está enlazado al mismo nodo
+
+            // si había un input anterior, limpia
+            if (currentInput && currentInput._tlpyBrandHandler) {
+                currentInput.removeEventListener("input", currentInput._tlpyBrandHandler);
+                currentInput.removeEventListener("change", currentInput._tlpyBrandHandler);
+                currentInput.removeEventListener("blur", currentInput._tlpyBrandHandler);
             }
 
             const handler = async () => {
@@ -126,25 +134,34 @@ window.tilopayInterop = (function () {
                     ensureSdk();
                     if (typeof window.Tilopay.getCardType !== "function") return;
                     const r = await window.Tilopay.getCardType();
-
-                    // Soporta formatos distintos del SDK sin heurística local
                     const brand = (r && (r.message || r.cardType || r.type || r.result || r) || "")
                         .toString().toLowerCase();
 
-                    if (ref) await ref.invokeMethodAsync("OnCardBrandChanged", brand);
+                    // aunque venga vacío, pásalo para que el C# pueda “apagar” la anterior
+                    if (ref) await ref.invokeMethodAsync("OnCardBrandChanged", brand || "");
                 } catch { /* no-op */ }
             };
 
-            input._tlpyBrandHandler = handler;
-            input.addEventListener("input", handler);
-            input.addEventListener("change", handler);
-            input.addEventListener("blur", handler);
+            el._tlpyBrandHandler = handler;
+            el.addEventListener("input", handler);
+            el.addEventListener("change", handler);
+            el.addEventListener("blur", handler);
 
-            handler(); // primera detección
+            currentInput = el;
+            bound = true;
+
+            // detección inmediata
+            handler();
         };
 
-        attach();
+        // intenta enlazar ahora…
+        bind();
+        // …y vuelve a intentar cada 500 ms por si MudBlazor reemplaza el nodo
+        if (!watchCardBrand._interval) {
+            watchCardBrand._interval = setInterval(bind, 500);
+        }
     }
+
 
 
     // ------------------ PAY ------------------
