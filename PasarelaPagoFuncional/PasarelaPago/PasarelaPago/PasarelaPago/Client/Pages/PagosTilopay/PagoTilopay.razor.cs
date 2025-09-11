@@ -439,6 +439,24 @@ public async Task OnPaymentEvent(PaymentEvent evt)
         public object? payload { get; set; }
     }
 
+    // --- Logo de la marca detectada ---
+    private static readonly Dictionary<string, string> _brandLogos = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["visa"] = "/img/visa.png",
+        ["mastercard"] = "/img/mastercard.png",
+        ["amex"] = "/img/amex.png",
+    };
+
+    private static string? GetBrandLogo(string? brand)
+    {
+        if (!string.IsNullOrWhiteSpace(brand) && _brandLogos.TryGetValue(brand.Trim(), out var path))
+            return path;
+        return null; // <<< sin marca -> nada
+    }
+
+    public string BrandLogoSrc => GetBrandLogo(CardBrand) ?? string.Empty;
+    public bool HasBrandLogo => !string.IsNullOrWhiteSpace(BrandLogoSrc);
+
     public string CardClass(string brand) =>
         string.Equals(CardBrand, brand, StringComparison.OrdinalIgnoreCase) ? "active" : "";
 }

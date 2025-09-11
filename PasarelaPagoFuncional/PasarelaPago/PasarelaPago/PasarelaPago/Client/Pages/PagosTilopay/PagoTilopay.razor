@@ -71,19 +71,24 @@
                                                   Spacing="1"
                                                   Class="cc-logos"
                                                   Style="position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none;">
-                                            <MudImage Src="/img/visa.png"
-                                                      Alt="Visa"
-                                                      Class="@($"cc-logo {(CardBrand == "visa" ? "active" : "")}")"
-                                                      Style="height:20px" />
-                                            <MudImage Src="/img/mastercard.png"
-                                                      Alt="Mastercard"
-                                                      Class="@($"cc-logo {(CardBrand == "mastercard" ? "active" : "")}")"
-                                                      Style="height:20px" />
-                                            <MudImage Src="/img/amex.png"
-                                                      Alt="American Express"
-                                                      Class="@($"cc-logo {(CardBrand == "amex" ? "active" : "")}")"
-                                                      Style="height:20px" />
+
+                                           @if (HasBrandLogo)
+                                            {
+                                                <MudStack Row="true"
+                                                          AlignItems="AlignItems.Center"
+                                                          Spacing="1"
+                                                          Class="cc-logos"
+                                                          Style="position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none;">
+                                                    <MudImage Src="@BrandLogoSrc"
+                                                              Alt="@CardBrand"
+                                                              Class="cc-logo active"
+                                                              Style="height:24px" />
+                                                </MudStack>
+                                            }
+
+
                                         </MudStack>
+
                                     </MudStack>
 
                                 </MudItem>
@@ -123,66 +128,6 @@
                                                           ["inputmode"] = "numeric"
                                                       })" />
 
-                                </MudItem>
-                            </MudGrid>
-                        </MudCardContent>
-                    </MudCard>
-                }
-
-                <!-- Datos SINPE -->
-                @if (SelectedPaymentMethod == SIMPE)
-                {
-                    <MudCard Class="mb-2">
-                        <MudCardContent>
-                            <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Datos de SINPE Móvil</MudText>
-
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12" sm="6">
-                                    <MudTextField T="string"
-                                                  Label="Teléfono"
-                                                  Placeholder="8888-8888"
-                                                  @bind-Value="Phone"
-                                                  Immediate MaxLength="9"
-                                                  FullWidth Dense Margin="Margin.Dense"
-                                                  Variant="Variant.Outlined"
-                                                  InputType="InputType.Telephone"
-                                                  Validation="ValidatePhone"
-                                                  InputAttributes="PhoneInputAttrs" />
-                                </MudItem>
-
-                                <MudItem xs="12" sm="6">
-                                    <MudNumericField T="decimal?"
-                                                     @bind-Value="SinpeAmount"
-                                                     Label="Monto"
-                                                     Placeholder="0.00"
-                                                     Immediate Dense FullWidth
-                                                     Margin="Margin.Dense" Variant="Variant.Outlined"
-                                                     Adornment="Adornment.Start"
-                                                     AdornmentText="@(Currency?.ToUpper() == "USD" ? "$" : "₡")"
-                                                     DecimalPlaces="2" Min="0.01m" Step="0.01m"
-                                                     Required RequiredError="El monto es requerido"
-                                                     InputAttributes="@(new Dictionary<string, object> {
-                                                         ["id"] = "tlpy_amount",
-                                                         ["name"] = "tlpy_amount",
-                                                         ["inputmode"] = "decimal",
-                                                         ["autocomplete"] = "off"
-                                                     })" />
-                                </MudItem>
-
-                                <MudItem xs="12">
-                                    <MudTextField T="string"
-                                                  Label="Concepto"
-                                                  Placeholder="Pago"
-                                                  @bind-Value="SinpeRef"
-                                                  FullWidth Dense Margin="Margin.Dense"
-                                                  Variant="Variant.Outlined"
-                                                  Counter="50"
-                                                  Validation="ValidateConcept"
-                                                  InputAttributes="@(new Dictionary<string, object> {
-                                                      ["id"] = "tlpy_concept",
-                                                      ["name"] = "tlpy_concept",
-                                                      ["maxlength"] = "50"
-                                                  })" />
                                 </MudItem>
                             </MudGrid>
                         </MudCardContent>
