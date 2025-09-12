@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Components;
+using System;
 using System.Globalization;
 using System.Web;
 
@@ -27,7 +28,7 @@ public partial class Resultado : ComponentBase
         var uri = new Uri(Nav.Uri);
         var dict = ParseQuery(uri.Query);
 
-        // Campos que Tilopay suele enviar
+        // Datos core que envía Tilopay
         dict.TryGetValue("code", out var code);
         dict.TryGetValue("description", out var description);
         dict.TryGetValue("auth", out var auth);
@@ -38,11 +39,27 @@ public partial class Resultado : ComponentBase
         if (string.IsNullOrWhiteSpace(tilopayTx) && dict.TryGetValue("tpt", out var tpt))
             tilopayTx = tpt;
 
-        // Opcionales (por si los incluyes en redirect o en returnData)
+        // Monto / moneda (pueden venir desde redirect o returnData)
         dict.TryGetValue("amount", out var amount);
         dict.TryGetValue("currency", out var currency);
-        dict.TryGetValue("customer", out var customer);
+
+        // Cliente: aceptamos varias claves (según lo que mandes en redirect/returnData)
+        dict.TryGetValue("customer", out var customer);                 // "Nombre Apellidos"
         dict.TryGetValue("email", out var email);
+        dict.TryGetValue("billToFirstName", out var firstName);
+        dict.TryGetValue("billToLastName", out var lastName);
+
+        // País y Cédula: aceptamos varias variantes
+        dict.TryGetValue("billToCountry", out var country);
+        if (string.IsNullOrWhiteSpace(country) && dict.TryGetValue("country", out var c2)) country = c2;
+
+        dict.TryGetValue("customerId", out var idNumber);
+        if (string.IsNullOrWhiteSpace(idNumber) && dict.TryGetValue("cedula", out var c3)) idNumber = c3;
+        if (string.IsNullOrWhiteSpace(idNumber) && dict.TryGetValue("id", out var c4)) idNumber = c4;
+
+        var displayCustomer = !string.IsNullOrWhiteSpace(customer)
+            ? customer
+            : $"{(firstName ?? "").Trim()} {(lastName ?? "").Trim()}".Trim();
 
         Result = new PaymentResult
         {
@@ -55,8 +72,14 @@ public partial class Resultado : ComponentBase
             TilopayTx = tilopayTx,
             Amount = amount,
             Currency = currency,
+            // nuevos
             Customer = customer,
-            Email = email
+            FirstName = firstName,
+            LastName = lastName,
+            DisplayCustomer = string.IsNullOrWhiteSpace(displayCustomer) ? null : displayCustomer,
+            Country = country,
+            IdNumber = idNumber,
+            Email = email,
         };
 
         // Banner
@@ -117,13 +140,17 @@ public partial class Resultado : ComponentBase
     {
         var b = (brand ?? "").Trim();
         var mask = !string.IsNullOrWhiteSpace(last4) ? $"•••• •••• •••• {last4}" : "";
-        if (string.IsNullOrWhiteSpace(b)) return string.IsNullOrWhiteSpace(mask) ? "-" : mask;
+        if (string.IsNullOrWhiteSpace(b))
+            return string.IsNullOrWhiteSpace(mask) ? "-" : mask;
+
         b = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(b.ToLowerInvariant()); // Visa, Mastercard, Amex
         return string.IsNullOrWhiteSpace(mask) ? b : $"{b}  —  {mask}";
     }
 
+
     public sealed class PaymentResult
     {
+        // tilopay
         public string? Code { get; set; }
         public string? Description { get; set; }
         public string? Auth { get; set; }
@@ -132,9 +159,18 @@ public partial class Resultado : ComponentBase
         public string? Last4 { get; set; }
         public string? TilopayTx { get; set; }
 
+        // monto
         public string? Amount { get; set; }
         public string? Currency { get; set; }
-        public string? Customer { get; set; }
+
+     
+        public string? Customer { get; set; }      // si viene ya concatenado
+        public string? FirstName { get; set; }     // por si vienen separados
+        public string? LastName { get; set; }
+        public string? DisplayCustomer { get; set; } // nombre final a mostrar
+
+        public string? Country { get; set; }
+        public string? IdNumber { get; set; }
         public string? Email { get; set; }
 
         public string? AmountLabel =>

@@ -1,13 +1,13 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using PasarelaPago.Client.Services;
-using PasarelaPago.Shared.Dtos; // <-- NUEVO
+using PasarelaPago.Shared.Dtos; // <-- si no lo usas, puedes quitarlo
 using PasarelaPago.Shared.Models;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
 using System.Linq;
-using System.Net.Http.Json; // <-- NUEVO
+using System.Net.Http.Json;
 
 namespace PasarelaPago.Client.Pages.PagosTilopay;
 
@@ -17,7 +17,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     [Inject] protected TilopayApi Api { get; set; } = default!;
     [Inject] protected IJSRuntime JS { get; set; } = default!;
     [Inject] protected NavigationManager Nav { get; set; } = default!;
-    [Inject] protected HttpClient Http { get; set; } = default!; // <-- CAMBIO
+    [Inject] protected HttpClient Http { get; set; } = default!;
 
     // -------- Constantes Tilopay (métodos) --------
     public const string PAYFAC = "12:3:88802749:payfac:0:";
@@ -53,11 +53,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public string? CardBrand { get; set; }
     public int CvvMaxLen => CardBrand == "amex" ? 4 : 3;
     public int CardNumberMaxLen => CardBrand == "amex" ? 15 : 19;
-
-    public int CardNumberMaxChars => CardBrand == "amex" ? 17 : 22;
-
-    // Validación lógica por dígitos (sin espacios)
-    public int CardNumberDigitsMax => CardBrand == "amex" ? 15 : 19;
+    public int CardNumberMaxChars => CardBrand == "amex" ? 17 : 22; // con espacios
+    public int CardNumberDigitsMax => CardBrand == "amex" ? 15 : 19; // solo dígitos
 
     public string? ValidateCardNumber(string? v)
     {
@@ -77,7 +74,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     private bool _sdkReady;
 
     // construye URL absoluta (Tilopay suele requerir https)
-    public string RedirectUrl => BuildRedirectUrl("/pagos/resultado");
+    public string RedirectUrl => BuildRedirectUrl("/pagos/resultado"); // usa la sobrecarga sin query
 
     // Estado y callback
     public bool Pagando { get; set; }
@@ -180,8 +177,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                     description = "preinit",
                     language = "es",
                     capture = "1",
-                    redirect = RedirectUrl,
-                    paymentMethod = PAYFAC     // <── clave para el pre-init
+                    redirect = BuildRedirectUrl("/pagos/resultado"), // sin query está bien para pre-init
+                    paymentMethod = PAYFAC
                 };
                 await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, preOptions, _selfRef);
                 await JS.InvokeVoidAsync("tilopayInterop.watchCardBrand", _selfRef);
@@ -193,20 +190,34 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         await JS.InvokeVoidAsync("tilopayInterop.watchCardBrand", _selfRef);
     }
 
-
     public async ValueTask DisposeAsync()
     {
         _selfRef?.Dispose();
         await Task.CompletedTask;
     }
 
-    private string BuildRedirectUrl(string path)
+    // --- Helpers redirect ---
+    private string BuildRedirectUrl(string path) => BuildRedirectUrl(path, null);
+
+    private string BuildRedirectUrl(string path, IDictionary<string, string?>? query)
     {
         var uri = new Uri(Nav.Uri);
         var scheme = "https"; // fuerza https en dev si estás en http
         var host = uri.Host;
         var port = uri.IsDefaultPort ? "" : $":{uri.Port}";
-        return $"{scheme}://{host}{port}{path}";
+        var baseUrl = $"{scheme}://{host}{port}{path}";
+
+        if (query is null || query.Count == 0) return baseUrl;
+
+        var parts = new List<string>(query.Count);
+        foreach (var kv in query)
+        {
+            if (string.IsNullOrWhiteSpace(kv.Key)) continue;
+            if (string.IsNullOrWhiteSpace(kv.Value)) continue; // omite nulos/vacíos
+            parts.Add($"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value!)}");
+        }
+        var qs = string.Join("&", parts);
+        return parts.Count > 0 ? $"{baseUrl}?{qs}" : baseUrl;
     }
 
     public string? ValidateExpiry(string? v)
@@ -286,6 +297,18 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             Estado = "Inicializando SDK…";
             StateHasChanged();
 
+            // ---- redirect con datos para el comprobante ----
+            var redirectUrl = BuildRedirectUrl("/pagos/resultado", new Dictionary<string, string?>
+            {
+                ["amount"] = ToInvariantAmount(amountToPay),
+                ["currency"] = Currency,
+                ["billToFirstName"] = BillToFirstName,
+                ["billToLastName"] = BillToLastName,
+                ["billToCountry"] = BillToCountry,
+                ["customerId"] = CustomerId,
+                ["email"] = BillToEmail
+            });
+
             var options = new
             {
                 orderNumber = _orderNumber,
@@ -294,7 +317,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 description = "Pago de servicios",
                 language = "es",
                 capture = "1",
-                redirect = RedirectUrl,
+                redirect = redirectUrl, // 👈 ahora lleva los datos
                 billToEmail = BillToEmail,
                 billToFirstName = BillToFirstName,
                 billToLastName = BillToLastName,
@@ -344,82 +367,75 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         }
     }
 
-
-[JSInvokable]
-public async Task OnPaymentEvent(PaymentEvent evt)
-{
-    var status = (evt?.status ?? "").ToLowerInvariant();
-
-    if (status == "success" || status == "approved" || status == "ok" || status == "completed")
+    [JSInvokable]
+    public async Task OnPaymentEvent(PaymentEvent evt)
     {
-        // 1) Calcular monto SIEMPRE no-null
-        decimal amountToPay = (SelectedPaymentMethod == PAYFAC)
-            ? Amount                         // Amount ya es decimal no-null
-            : (SinpeAmount ?? 0m);           // SINPE podría venir null
+        var status = (evt?.status ?? "").ToLowerInvariant();
 
-        if (amountToPay <= 0m)
+        if (status == "success" || status == "approved" || status == "ok" || status == "completed")
         {
-            Estado = "Monto inválido. No se puede registrar el pago.";
-            StateHasChanged();
-            return;
+            decimal amountToPay = (SelectedPaymentMethod == PAYFAC)
+                ? Amount
+                : (SinpeAmount ?? 0m);
+
+            if (amountToPay <= 0m)
+            {
+                Estado = "Monto inválido. No se puede registrar el pago.";
+                StateHasChanged();
+                return;
+            }
+
+            var cliente = new Cliente
+            {
+                nombre = BillToFirstName,
+                apellido = BillToLastName,
+                correo = BillToEmail,
+                telefono = BillToTelephone,
+                direccion = BillToAddress,
+                ciudad = BillToCity,
+                provincia = BillToState,
+                codigoPostal = BillToZipPostCode,
+                pais = BillToCountry
+            };
+
+            string? payloadTexto = null;
+            try { payloadTexto = JsonSerializer.Serialize(evt?.payload); }
+            catch { payloadTexto = evt?.payload?.ToString(); }
+
+            var pago = new Pago
+            {
+                numeroOrden = _orderNumber,
+                metodoPago = SelectedPaymentMethod,
+                monto = amountToPay,
+                moneda = Currency ?? "USD",
+                estadoTilopay = status,
+                datosRespuestaTilopay = payloadTexto,
+                fechaTransaccion = DateTime.UtcNow,
+                marcaTarjeta = (CardBrand ?? "").ToLowerInvariant()
+            };
+
+            var payload = new PagoConCliente { Cliente = cliente, Pago = pago };
+
+            try
+            {
+                var resp = await Http.PostAsJsonAsync("api/Transaccion", payload);
+                if (resp.IsSuccessStatusCode)
+                    Estado = "Pago aprobado. Datos guardados.";
+                else
+                    Estado = $"Error al guardar datos: {(int)resp.StatusCode} {resp.ReasonPhrase}";
+            }
+            catch (Exception ex)
+            {
+                Estado = $"Error al guardar datos: {ex.Message}";
+            }
+        }
+        else
+        {
+            Estado = $"Pago rechazado: {evt?.payload}";
         }
 
-        // 2) Construir Cliente
-        var cliente = new Cliente
-        {
-            nombre = BillToFirstName,
-            apellido = BillToLastName,
-            correo = BillToEmail,
-            telefono = BillToTelephone,
-            direccion = BillToAddress,
-            ciudad = BillToCity,
-            provincia = BillToState,
-            codigoPostal = BillToZipPostCode,
-            pais = BillToCountry
-        };
-
-        // 3) Serializar payload del SDK en texto (evita .ToString() [object])
-        string? payloadTexto = null;
-        try { payloadTexto = JsonSerializer.Serialize(evt?.payload); }
-        catch { payloadTexto = evt?.payload?.ToString(); }
-
-        // 4) Construir Pago (campos obligatorios NO nulos)
-        var pago = new Pago
-        {
-            numeroOrden = _orderNumber,
-            metodoPago = SelectedPaymentMethod,
-            monto = amountToPay,                  // <--- decimal no-null
-            moneda = Currency ?? "USD",
-            estadoTilopay = status,
-            datosRespuestaTilopay = payloadTexto,
-            fechaTransaccion = DateTime.UtcNow,              // <--- no-null
-            marcaTarjeta = (CardBrand ?? "").ToLowerInvariant()
-        };
-
-        var payload = new PagoConCliente { Cliente = cliente, Pago = pago };
-
-        try
-        {
-            // 5) Llamar API correcta
-            var resp = await Http.PostAsJsonAsync("api/Transaccion", payload);
-            if (resp.IsSuccessStatusCode)
-                Estado = "Pago aprobado. Datos guardados.";
-            else
-                Estado = $"Error al guardar datos: {(int)resp.StatusCode} {resp.ReasonPhrase}";
-        }
-        catch (Exception ex)
-        {
-            Estado = $"Error al guardar datos: {ex.Message}";
-        }
+        StateHasChanged();
     }
-    else
-    {
-        Estado = $"Pago rechazado: {evt?.payload}";
-    }
-
-    StateHasChanged();
-}
-
 
     [JSInvokable]
     public Task OnCardBrandChanged(string brand)
@@ -429,17 +445,13 @@ public async Task OnPaymentEvent(PaymentEvent evt)
         return Task.CompletedTask;
     }
 
-
-
-    // ... Resto de tu código ...
-
     public sealed class PaymentEvent
     {
         public string? status { get; set; }
         public object? payload { get; set; }
     }
 
-    // --- Logo de la marca detectada ---
+    // --- Logo de la marca detectada (para mostrar solo una imagen) ---
     private static readonly Dictionary<string, string> _brandLogos = new(StringComparer.OrdinalIgnoreCase)
     {
         ["visa"] = "/img/visa.png",
@@ -451,7 +463,7 @@ public async Task OnPaymentEvent(PaymentEvent evt)
     {
         if (!string.IsNullOrWhiteSpace(brand) && _brandLogos.TryGetValue(brand.Trim(), out var path))
             return path;
-        return null; // <<< sin marca -> nada
+        return null; // sin marca -> no mostrar nada
     }
 
     public string BrandLogoSrc => GetBrandLogo(CardBrand) ?? string.Empty;
