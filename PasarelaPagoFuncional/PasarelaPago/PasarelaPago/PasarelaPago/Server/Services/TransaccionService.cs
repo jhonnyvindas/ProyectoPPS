@@ -1,6 +1,7 @@
-﻿using PasarelaPago.Shared.Models;
+﻿using Microsoft.EntityFrameworkCore;
 using PasarelaPago.Server.Data;
-using Microsoft.EntityFrameworkCore;
+using PasarelaPago.Shared.Models;
+using System.Transactions; // Asegúrate de tener este 'using'
 
 namespace PasarelaPago.Server.Services;
 
@@ -8,61 +9,53 @@ public class TransaccionService
 {
     private readonly TilopayDbContext _context;
 
-    public TransaccionService(TilopayDbContext context) => _context = context;
+    public TransaccionService(TilopayDbContext context)
+    {
+        _context = context;
+    }
 
     public async Task GuardarTransaccionAsync(Cliente cliente, Pago pago)
     {
-        // Validaciones mínimas
-        if (string.IsNullOrWhiteSpace(pago.numeroOrden))
-            throw new ArgumentException("numeroOrden es requerido");
-        if (pago.monto <= 0)
-            throw new ArgumentException("monto debe ser > 0");
-        if (pago.fechaTransaccion == default)
-            pago.fechaTransaccion = DateTime.UtcNow;
-
-        await using var tx = await _context.Database.BeginTransactionAsync();
-
-        try
+        // Usa un TransactionScope para garantizar que todo se guarde o nada se guarde.
+        // Es una alternativa a BeginTransactionAsync.
+        using (var scope = new TransactionScope(TransactionScopeAsyncFlowOption.Enabled))
         {
-            var clienteExistente = await _context.Clientes
-                .FirstOrDefaultAsync(c => c.correo == cliente.correo);
-
-            int clienteId;
-
-            if (clienteExistente == null)
+            try
             {
-                _context.Clientes.Add(cliente);
-                await _context.SaveChangesAsync(); // para obtener el identity
-                clienteId = cliente.clienteId;
+                // Busca si el cliente ya existe en la base de datos por su cédula
+                var clienteExistente = await _context.Clientes
+          .FirstOrDefaultAsync(c => c.cedula == cliente.cedula);
+
+                // Si el cliente no existe, lo agrega al contexto.
+                if (clienteExistente == null)
+                {
+                    _context.Clientes.Add(cliente);
+                }
+                else
+                {
+                    // Si el cliente ya existe, se asocia el pago con el cliente existente.
+                    // Las actualizaciones de los datos del cliente se harán en el mismo SaveChanges.
+                    cliente.nombre = clienteExistente.nombre;
+                    cliente.apellido = clienteExistente.apellido;
+                    // ... puedes actualizar más campos aquí si lo deseas
+                }
+
+                // Agrega el pago al contexto.
+                _context.Pagos.Add(pago);
+
+                // Guarda todos los cambios en una sola operación.
+                await _context.SaveChangesAsync();
+
+                // Completa la transacción si no hay errores.
+                scope.Complete();
             }
-            else
+            catch (Exception ex)
             {
-                // (Opcional) actualiza datos básicos del cliente
-                clienteExistente.nombre = cliente.nombre;
-                clienteExistente.apellido = cliente.apellido;
-                clienteExistente.telefono = cliente.telefono;
-                clienteExistente.direccion = cliente.direccion;
-                clienteExistente.ciudad = cliente.ciudad;
-                clienteExistente.provincia = cliente.provincia;
-                clienteExistente.codigoPostal = cliente.codigoPostal;
-                clienteExistente.pais = cliente.pais;
-
-                await _context.SaveChangesAsync();
-                clienteId = clienteExistente.clienteId;
+                // La transacción se revertirá automáticamente
+                // Puedes registrar el error aquí para depurar
+                Console.WriteLine($"Error al guardar en la base de datos: {ex.Message}");
+                throw;
             }
-
-            // Asegura FK y campos obligatorios
-            pago.clienteId = clienteId;
-
-            _context.Pagos.Add(pago);
-            await _context.SaveChangesAsync();
-
-            await tx.CommitAsync();
-        }
-        catch
-        {
-            await tx.RollbackAsync();
-            throw;
         }
     }
 }

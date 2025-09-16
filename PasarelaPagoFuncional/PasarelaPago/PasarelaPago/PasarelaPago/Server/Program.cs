@@ -36,6 +36,17 @@ builder.Services.AddDbContext<TilopayDbContext>(options =>
 builder.Services.AddScoped<TransaccionService>();
 
 var app = builder.Build();
+// ---- Diagnóstico de BD al inicio ----
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<TilopayDbContext>();
+    var cnn = db.Database.GetDbConnection();
+    Console.WriteLine($"[DB] Provider   : {db.Database.ProviderName}");
+    Console.WriteLine($"[DB] DataSource : {cnn.DataSource}");
+    Console.WriteLine($"[DB] Database   : {cnn.Database}");
+    Console.WriteLine($"[DB] CanConnect : {db.Database.CanConnect()}");
+}
+
 
 if (app.Environment.IsDevelopment())
 {
