@@ -1,0 +1,104 @@
+﻿@page "/Transacciones"
+@inherits PasarelaPago.Client.Pages.DashboardPagos.DashboardPagos
+@using PasarelaPago.Shared.Dtos
+@using Syncfusion.Blazor.Grids
+
+<Header>Transacciones</Header>
+<MudCard>
+    <MudCardContent>
+        <MudGrid Class="ma-4">
+            <MudItem xs="4" sm="4" md="3" lg="2" xl="1" xxl="1">
+                <MudSelect Dense="true" T="string" Label="Estado" Margin="Margin.Dense" Variant="Variant.Outlined" @bind-Value="Filtro.EstadoTransaccion">
+                    <MudSelectItem T="string" Value="@((string)null)">Todos</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("aprobado")">Aprobado</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("rechazado")">Rechazado</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+
+            <MudItem xs="4" sm="4" md="3" lg="2" xl="1" xxl="1">
+                <MudDatePicker Label="Fecha inicio" @bind-Date="Filtro.FechaInicio" />
+            </MudItem>
+
+            <MudItem xs="4" sm="4" md="3" lg="2" xl="1" xxl="1">
+                <MudDatePicker Label="Fecha fin" @bind-Date="Filtro.FechaFin" />
+            </MudItem>
+            <MudItem xs="4" sm="4" md="3" lg="2" xl="1" xxl="1">
+                <MudButton Variant="Variant.Filled" Color="Color.Info" OnClick="CargarDashboard">Buscar</MudButton>
+            </MudItem>
+        </MudGrid>
+    </MudCardContent>
+</MudCard>
+
+<MudGrid>
+    <MudItem xs="12" sm="12" md="12" lg="12" xl="12" xxl="12">
+        <SfGrid  @ref="GridTransacciones" ID="GridTransacciones" TValue="DTOTransacciones"
+                DataSource="@Transacciones" AllowExcelExport="true"
+                AllowPaging="true" AllowSorting="true" AllowFiltering="true" AllowResizing="true"
+                class="CustomGridHeader CustomGridContent" ShowColumnChooser="true"
+                Toolbar="@( new List<string>() { "ExcelExport","ColumnChooser",  "Search"})"
+                    >
+          
+            <GridFilterSettings Type="Syncfusion.Blazor.Grids.FilterType.Excel"></GridFilterSettings>
+            <GridSelectionSettings Type="Syncfusion.Blazor.Grids.SelectionType.Single" Mode="Syncfusion.Blazor.Grids.SelectionMode.Row" PersistSelection="true"></GridSelectionSettings>
+            <GridPageSettings PageSize="10"></GridPageSettings>
+            <GridEvents TValue="DTOTransacciones"
+                        RowSelected="OnRowSelected"
+                        RowDeselected="OnRowDeselected"
+                        OnToolbarClick="OnToolbarClick"
+                        ExcelQueryCellInfoEvent="OnExcelQueryCellInfo" />
+
+            <GridColumns>
+                <GridColumn Field=@nameof(DTOTransacciones.cedula) HeaderText="Cédula" Type="ColumnType.String" Width="100" />
+                <GridColumn Field=@nameof(DTOTransacciones.nombreCliente) HeaderText="Nombre" Type="ColumnType.String" Width="150" />
+                <GridColumn Field=@nameof(DTOTransacciones.pais)
+                            HeaderText="País" Type="ColumnType.String" Width="120">
+                    <Template>
+                        @ToCountryName(((DTOTransacciones)context).pais)
+                    </Template>
+                </GridColumn>
+                <GridColumn Field=@nameof(DTOTransacciones.moneda)
+                            HeaderText="Moneda" Type="ColumnType.String" Width="110">
+                    <Template Context="row">
+                        @ToCurrencyName(((DTOTransacciones)row).moneda)
+                    </Template>
+                </GridColumn>
+                <GridColumn Field=@nameof(DTOTransacciones.monto) HeaderText="Monto" Type="ColumnType.Number" Width="100" />
+                <GridColumn Field=@nameof(DTOTransacciones.numeroOrden) HeaderText="# Orden" Type="ColumnType.String" Width="120" />
+                <GridColumn Field=@nameof(DTOTransacciones.fechaTransaccion) HeaderText="Fecha" Type="ColumnType.DateTime" Format="dd/MM/yyyy" Width="150" />
+                <GridColumn Field=@nameof(DTOTransacciones.estadoTransaccion)
+                            HeaderText="Estado" Type="ColumnType.String" Width="120">
+                    <Template>
+                        @{
+                            var r = (context as DTOTransacciones)!;
+                            var s = (r.estadoTransaccion ?? "").Trim().ToLowerInvariant();
+
+                            bool aprobado =
+                            s == "success" || s == "approved" || s == "aprobado" ||
+                            s == "captured" || s == "completed" || s == "paid";
+
+                            bool rechazado =
+                            s == "failed" || s == "rechazado" || s == "declined" ||
+                            s == "canceled" || s == "cancelled" || s == "error";
+                        }
+                        @if (aprobado)
+                        {
+                            <MudText Color="Color.Success" Style="font-size:12px;font-weight:bold;">Aprobado</MudText>
+                        }
+                        else if (rechazado)
+                        {
+                            <MudText Color="Color.Error" Style="font-size:12px;font-weight:bold;">Rechazado</MudText>
+                        }
+                        else
+                        {
+                            <MudText Color="Color.Info" Style="font-size:12px;font-weight:bold;">
+                                @((context as DTOTransacciones)!.estadoTransaccion)
+                            </MudText>
+                        }
+                    </Template>
+                </GridColumn>
+            </GridColumns>
+        </SfGrid>
+    </MudItem>
+</MudGrid>
+
+

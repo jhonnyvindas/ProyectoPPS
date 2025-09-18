@@ -190,7 +190,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
         {
 
-            "CRC" => new CultureInfo("es-CR"),
+            "CR" => new CultureInfo("es-CR"),
 
             "USD" => new CultureInfo("en-US"),
 
