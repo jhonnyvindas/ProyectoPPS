@@ -1,35 +1,17 @@
 ﻿using Microsoft.AspNetCore.Components;
-
 using Microsoft.JSInterop;
-
 using PasarelaPago.Client.Services;
-
-using PasarelaPago.Shared.Dtos; // si no usas el DTO, puedes quitarlo
-
+using PasarelaPago.Shared.Dtos;
 using PasarelaPago.Shared.Models;
-
-using System.Collections.Generic;
-
 using System.Globalization;
-
 using System.Text.Json;
-
-using System.Linq;
-
 using System.Net.Http.Json;
 
-
-
 namespace PasarelaPago.Client.Pages.PagosTilopay;
-
-
 
 public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
 {
-
-    // -------- Inyecciones --------
-
     [Inject] protected TilopayApi Api { get; set; } = default!;
 
     [Inject] protected IJSRuntime JS { get; set; } = default!;
@@ -38,23 +20,11 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     [Inject] protected HttpClient Http { get; set; } = default!;
 
+    public const string PAYFAC = "12:3:88802749:payfac:0:"; 
 
-
-    // -------- Constantes Tilopay (métodos) --------
-
-    public const string PAYFAC = "12:3:88802749:payfac:0:"; // tarjeta
-
-    public const string SIMPE = "12:3:88802749:simpe:0:";  // sinpe
-
-
-
-    // -------- Estado UI / Binding --------
+    public const string SIMPE = "12:3:88802749:simpe:0:";  
 
     public string SelectedPaymentMethod { get; set; } = PAYFAC;
-
-
-
-    // Tarjeta (demo)
 
     public string? CardNumber { get; set; } = "4012000000020089";
 
@@ -63,18 +33,12 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public string? CVV { get; set; } = "123";
 
 
-
-    // SINPE
-
     public string? Phone { get; set; }
 
     public decimal? SinpeAmount { get; set; }
 
     public string? SinpeRef { get; set; }
 
-
-
-    // Datos del propietario/cliente (incluye CÉDULA)
 
     public bool OwnerReadOnly => false;
 
@@ -112,8 +76,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     public int CardNumberDigitsMax => CardBrand == "amex" ? 15 : 19;
 
-
-
     public string? ValidateCardNumber(string? v)
 
     {
@@ -128,15 +90,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     }
 
-
-
-    // Base del pago
-
     private string _orderNumber = Guid.NewGuid().ToString("N");
 
     public string OrderNumber => _orderNumber;
-
-
 
     public decimal Amount { get; set; } = 1.00m;
 
@@ -146,27 +102,13 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     private bool _sdkReady;
 
-
-
-    // construye URL absoluta (Tilopay suele requerir https)
-
     public string RedirectUrl => BuildRedirectUrl("/pagos/resultado");
-
-
-
-    // Estado y callback
 
     public bool Pagando { get; set; }
 
     public string? Estado { get; set; }
 
-
-
     private DotNetObjectReference<PagoTilopay>? _selfRef;
-
-
-
-    // -------- Helpers de UI --------
 
     public string PayLabel => FormatPayLabel(
 
@@ -175,8 +117,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     Currency
 
   );
-
-
 
     public static string FormatPayLabel(decimal amount, string? currency)
 
@@ -202,10 +142,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     }
 
-
-
-    // Atributos de inputs
-
     public IReadOnlyDictionary<string, object> PhoneInputAttrs => new Dictionary<string, object>
 
     {
@@ -230,7 +166,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
         ["inputmode"] = "numeric",
 
-        ["maxlength"] = "12"
+        ["maxlength"] = "12",
+
+        ["pattern"] = "[0-9]*"
 
     };
 
@@ -244,7 +182,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
         ["inputmode"] = "numeric",
 
-        ["maxlength"] = "9"
+        ["maxlength"] = "9",
+
+        ["pattern"] = "[0-9]*"
 
     };
 
@@ -266,7 +206,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
         ["name"] = "billToZipPostCode",
 
-        ["inputmode"] = "numeric"
+        ["inputmode"] = "numeric",
+
+        ["pattern"] = "[0-9]*"
 
     };
 
@@ -300,10 +242,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     };
 
-
-
-    // -------- Ciclo de vida --------
-
     protected override void OnInitialized()
 
     {
@@ -311,8 +249,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         _selfRef = DotNetObjectReference.Create(this);
 
     }
-
-
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
 
@@ -326,13 +262,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
             _selfRef = DotNetObjectReference.Create(this);
 
-
-
         try
 
         {
-
-            // 1) Obtener token y pre-inicializar el SDK
 
             var token = await Api.GetSdkTokenAsync();
 
@@ -377,8 +309,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         await JS.InvokeVoidAsync("tilopayInterop.watchCardBrand", _selfRef);
 
     }
-
-
 
     public async ValueTask DisposeAsync()
 
@@ -437,9 +367,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return parts.Count > 0 ? $"{baseUrl}?{qs}" : baseUrl;
 
     }
-
-
-
     public string? ValidateExpiry(string? v)
 
     {
@@ -463,7 +390,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     }
 
 
-
     public string? ValidateCVV(string? v)
 
     {
@@ -473,7 +399,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return digits.Length == CvvMaxLen ? null : $"CVV de {CvvMaxLen} dígitos";
 
     }
-
 
 
     public string? ValidatePhone(string? v)
@@ -487,7 +412,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return d.Length == 8 ? null : "Use formato ####-####";
 
     }
-
 
 
     public string? ValidateConcept(string? v) => string.IsNullOrWhiteSpace(v) || v.Trim().Length < 3 ? "Mínimo 3 caracteres" : null;
@@ -518,25 +442,16 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
       };
 
-
-
     private string ToInvariantAmount(decimal amount)
 
       => amount.ToString("F2", CultureInfo.InvariantCulture);
 
-
-
-    // Convierte el método seleccionado al valor corto para BD
 
     private string MetodoPagoParaBD() =>
 
     SelectedPaymentMethod == PAYFAC ? "payfac" :
 
     SelectedPaymentMethod == SIMPE ? "simpe" : "payfac";
-
-
-
-    // -------- Pago --------
 
     public async Task Pagar()
 
@@ -614,9 +529,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
             StateHasChanged();
 
-
-
-            // redirect con datos para el comprobante
 
             var redirectUrl = BuildRedirectUrl("/pagos/resultado", new Dictionary<string, string?>
 

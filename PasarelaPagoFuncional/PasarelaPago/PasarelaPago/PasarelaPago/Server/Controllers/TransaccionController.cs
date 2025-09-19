@@ -14,26 +14,18 @@ namespace PasarelaPago.Server.Controllers;
 [Route("api/[controller]")]
 
 public class TransaccionController : ControllerBase
-
 {
-
     private readonly TransaccionService _svc;
 
     public TransaccionController(TransaccionService svc) => _svc = svc;
 
-
-
     public class PagoConCliente
 
     {
-
         public Cliente Cliente { get; set; } = default!;
 
         public Pago Pago { get; set; } = default!;
-
     }
-
-
 
     [HttpPost]
 
@@ -43,17 +35,11 @@ public class TransaccionController : ControllerBase
 
         if (body is null) return BadRequest("Cuerpo vacío.");
 
-
-
-        // Garantiza cédula presente en ambos objetos
-
         var ced = body.Cliente?.cedula ?? body.Pago?.cedula;
 
         if (string.IsNullOrWhiteSpace(ced))
 
             return BadRequest("La cédula es requerida.");
-
-
 
         body.Cliente ??= new Cliente { cedula = ced };
 
@@ -61,14 +47,11 @@ public class TransaccionController : ControllerBase
 
         body.Pago.cedula = ced;
 
-
-
         await _svc.GuardarTransaccionAsync(body.Cliente, body.Pago);
 
         return Ok();
 
     }
-
 
     [HttpGet("dashboard")]
     public async Task<ActionResult<PaginacionResponse<DTOTransacciones>>> GetTransacciones([FromQuery] FiltroTransacciones filtro)

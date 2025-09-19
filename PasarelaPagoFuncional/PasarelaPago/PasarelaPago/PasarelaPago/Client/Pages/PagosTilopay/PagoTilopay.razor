@@ -3,315 +3,312 @@
 @using MudBlazor
 @using System.Collections.Generic
 
-<MudContainer MaxWidth="MaxWidth.Medium" Class="mx-auto mt-6">
-
-    <!-- Wrapper sin <form> para no interferir con el SDK -->
-    <div id="payFormTilopay" class="payFormTilopay form-reset">
-
-        <MudGrid Justify="Justify.Center">
-            <MudItem xs="12" sm="10" md="9" lg="8" xl="7">
+<MudGrid Justify="Justify.SpaceAround">
+  <MudItem xs="12" sm="12" md="12" lg="6" xl="6" xxl="6">
+    <MudCard Class="flex-col-fill">
+      <MudCardContent Class="grow">
+        <div id="payFormTilopay" class="payFormTilopay form-reset">
+            <MudGrid Justify="Justify.Center">
+              <!-- Columna principal del formulario -->
+              <MudItem>
 
                 <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-2">
-                    Pago de servicios
+                  Pago de servicios
                 </MudText>
 
                 <!-- Método de pago -->
                 <MudCard Class="mb-3">
-                    <MudCardContent>
-                        <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Métodos de pago</MudText>
+                  <MudCardContent>
+                    <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Métodos de pago</MudText>
 
-                        <MudSelect T="string"
-                                   @bind-Value="SelectedPaymentMethod"
-                                   FullWidth Dense
-                                   Margin="Margin.Dense"
-                                   Variant="Variant.Outlined">
-                            <MudSelectItem T="string" Value="@PAYFAC">Tarjeta</MudSelectItem>
-                            <MudSelectItem T="string" Value="@SIMPE">SINPE Móvil</MudSelectItem>
-                        </MudSelect>
+                    <MudSelect T="string"
+                               @bind-Value="SelectedPaymentMethod"
+                               FullWidth Dense
+                               Margin="Margin.Dense"
+                               Variant="Variant.Outlined">
+                      <MudSelectItem T="string" Value="@PAYFAC">Tarjeta</MudSelectItem>
+                      <MudSelectItem T="string" Value="@SIMPE">SINPE Móvil</MudSelectItem>
+                    </MudSelect>
 
-                        <!-- Refuerzo para el SDK -->
-                        <input type="hidden"
-                               id="tlpy_payment_method"
-                               name="tlpy_payment_method"
-                               value="@SelectedPaymentMethod" />
-                    </MudCardContent>
+                    <!-- Refuerzo para el SDK -->
+                    <input type="hidden"
+                           id="tlpy_payment_method"
+                           name="tlpy_payment_method"
+                           value="@SelectedPaymentMethod" />
+                  </MudCardContent>
                 </MudCard>
 
                 <!-- Datos de la tarjeta -->
                 @if (SelectedPaymentMethod == PAYFAC)
                 {
-                    <MudCard Class="mb-2">
-                        <MudCardContent Class="py-1 px-3">
-                            <MudText Typo="Typo.subtitle1" Bold Class="mb-1">Datos de la tarjeta</MudText>
+                  <MudCard Class="mb-2">
+                    <MudCardContent Class="py-1 px-3">
+                      <MudText Typo="Typo.subtitle1" Bold Class="mb-1">Datos de la tarjeta</MudText>
 
-                            <MudGrid Spacing="3">
-                                <MudItem xs="12">
-                                    <MudStack Class="cc-wrapper" Style="position:relative;">
-                                       <MudTextField T="string"
-                                                    Label="Número de tarjeta"
-                                                    Id="tlpy_cc_number"
-                                                    @bind-Value="CardNumber"
-                                                    Immediate
-                                                    MaxLength="@CardNumberMaxChars"
-                                                    FullWidth Dense Margin="Margin.Dense"
-                                                    Variant="Variant.Outlined"
-                                                    InputType="InputType.Telephone"
-                                                    Validation="ValidateCardNumber"
-                                                    InputClass="cc-input-pad"
-                                                    InputAttributes="@(new Dictionary<string, object> {   
-                                                        ["id"] = "tlpy_cc_number",
-                                                        ["name"] = "cc_number",
-                                                        ["inputmode"] = "numeric",
-                                                        ["autocomplete"] = "cc-number"
-                                                    })" />
+                      <MudGrid Spacing="3">
+                        <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                          <MudStack Class="cc-wrapper" Style="position:relative;">
+                            <MudTextField T="string"
+                                          Label="Número de tarjeta"
+                                          Id="tlpy_cc_number"
+                                          @bind-Value="CardNumber"
+                                          Immediate
+                                          MaxLength="@CardNumberMaxChars"
+                                          FullWidth Dense Margin="Margin.Dense"
+                                          Variant="Variant.Outlined"
+                                          InputType="InputType.Telephone"
+                                          Validation="ValidateCardNumber"
+                                          InputClass="cc-input-pad"
+                                          InputAttributes="@(new Dictionary<string, object> {
+                                            ["id"] = "tlpy_cc_number",
+                                            ["name"] = "cc_number",
+                                            ["inputmode"] = "numeric",
+                                            ["pattern"] = "[0-9]*", 
+                                            ["autocomplete"] = "cc-number"
+                                          })" />
 
+                            <MudStack Row="true"
+                                      AlignItems="AlignItems.Center"
+                                      Spacing="1"
+                                      Class="cc-logos"
+                                      Style="position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none;">
+                              @if (HasBrandLogo)
+                              {
+                                <MudImage Src="@BrandLogoSrc"
+                                          Alt="@CardBrand"
+                                          Class="cc-logo active"
+                                          Style="height:24px" />
+                              }
+                            </MudStack>
+                          </MudStack>
+                        </MudItem>
 
-                                        <MudStack Row="true"
-                                                  AlignItems="AlignItems.Center"
-                                                  Spacing="1"
-                                                  Class="cc-logos"
-                                                  Style="position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none;">
+                        <MudItem xs="3" sm="3" md="3" lg="3" xl="3" xxl="3">
+                          <MudTextField T="string"
+                                        Id="tlpy_cc_expiration_date"
+                                        Label="Fecha vencimiento"
+                                        Placeholder="MM/YY"
+                                        @bind-Value="Expiry"
+                                        Immediate MaxLength="5"
+                                        FullWidth Dense Margin="Margin.Dense"
+                                        Variant="Variant.Outlined"
+                                        InputType="InputType.Telephone"
+                                        Validation="ValidateExpiry"
+                                        InputAttributes="@(new Dictionary<string, object> {
+                                          ["name"] = "tlpy_cc_expiration_date",
+                                          ["autocomplete"] = "cc-exp"
+                                        })" />
+                        </MudItem>
 
-                                           @if (HasBrandLogo)
-                                            {
-                                                <MudStack Row="true"
-                                                          AlignItems="AlignItems.Center"
-                                                          Spacing="1"
-                                                          Class="cc-logos"
-                                                          Style="position:absolute; right:10px; top:50%; transform:translateY(-50%); pointer-events:none;">
-                                                    <MudImage Src="@BrandLogoSrc"
-                                                              Alt="@CardBrand"
-                                                              Class="cc-logo active"
-                                                              Style="height:24px" />
-                                                </MudStack>
-                                            }
-
-
-                                        </MudStack>
-
-                                    </MudStack>
-
-                                </MudItem>
-
-                                <MudItem xs="6">
-                                    <MudTextField T="string"
-                                                  Id="tlpy_cc_expiration_date"
-                                                  Label="Fecha vencimiento"
-                                                  Placeholder="MM/YY"
-                                                  @bind-Value="Expiry"
-                                                  Immediate MaxLength="5"
-                                                  FullWidth Dense Margin="Margin.Dense"
-                                                  Variant="Variant.Outlined"
-                                                  InputType="InputType.Telephone"
-                                                  Validation="ValidateExpiry"
-                                                  InputAttributes="@(new Dictionary<string, object> {
-                                                      ["name"] = "tlpy_cc_expiration_date",
-                                                      ["autocomplete"] = "cc-exp"
-                                                  })" />
-                                </MudItem>
-
-                                <MudItem xs="6">
-                                    <MudTextField T="string"
-                                                      Id="tlpy_cvv"
-                                                      Label="@(CardBrand == "amex" ? "Código de seguridad (CID)" : "Código verificación (CVV)")"
-                                                      Placeholder="@(CardBrand == "amex" ? "4 dígitos" : "3 dígitos")"
-                                                      @bind-Value="CVV"
-                                                      Immediate
-                                                      MaxLength="@CvvMaxLen"
-                                                      FullWidth Dense Margin="Margin.Dense"
-                                                      Variant="Variant.Outlined"
-                                                      InputType="InputType.Telephone"
-                                                      Validation="ValidateCVV"
-                                                      InputAttributes="@(new Dictionary<string, object> {
-                                                          ["name"] = "tlpy_cvv",
-                                                          ["autocomplete"] = "cc-csc",
-                                                          ["inputmode"] = "numeric"
-                                                      })" />
-
-                                </MudItem>
-                            </MudGrid>
-                        </MudCardContent>
-                    </MudCard>
+                        <MudItem xs="3" sm="3" md="3" lg="3" xl="3" xxl="3">
+                          <MudTextField T="string"
+                                        Id="tlpy_cvv"
+                                        Label="@(CardBrand == "amex" ? "Código de seguridad (CID)" : "Código verificación (CVV)")"
+                                        Placeholder="@(CardBrand == "amex" ? "4 dígitos" : "3 dígitos")"
+                                        @bind-Value="CVV"
+                                        Immediate
+                                        MaxLength="@CvvMaxLen"
+                                        FullWidth Dense Margin="Margin.Dense"
+                                        Variant="Variant.Outlined"
+                                        InputType="InputType.Telephone"
+                                        Validation="ValidateCVV"
+                                        InputAttributes="@(new Dictionary<string, object> {
+                                          ["name"] = "tlpy_cvv",
+                                          ["autocomplete"] = "cc-csc",
+                                          ["inputmode"] = "numeric",
+                                          ["pattern"] = "[0-9]*", 
+                                        })" />
+                        </MudItem>
+                      </MudGrid>
+                    </MudCardContent>
+                  </MudCard>
                 }
 
                 <!-- Datos del propietario -->
                 <MudCard Class="mb-2">
-                    <MudCardContent>
-                        <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Datos del propietario</MudText>
+                  <MudCardContent>
+                    <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Datos del propietario</MudText>
 
-                        <MudGrid Spacing="3">
-                            <MudItem xs="12">
-                                <MudTextField T="string"
-                                              Label="Nombre"
-                                              Placeholder="Juan"
-                                              @bind-Value="BillToFirstName"
-                                              ReadOnly="@OwnerReadOnly"
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              InputAttributes="@(new Dictionary<string, object> {
-                                                  ["id"] = "billToFirstName",
-                                                  ["name"] = "billToFirstName"
-                                              })" />
-                            </MudItem>
+                    <MudGrid Spacing="3">
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Nombre"
+                                      Placeholder="Juan"
+                                      @bind-Value="BillToFirstName"
+                                      ReadOnly="@OwnerReadOnly"
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      InputAttributes="@(new Dictionary<string, object> {
+                                        ["id"] = "billToFirstName",
+                                        ["name"] = "billToFirstName"
+                                      })" />
+                      </MudItem>
 
-                            <MudItem xs="12">
-                                <MudTextField T="string"
-                                              Label="Apellidos"
-                                              Placeholder="Perez Cedeño"
-                                              @bind-Value="BillToLastName"
-                                              ReadOnly="@OwnerReadOnly"
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              InputAttributes="@(new Dictionary<string, object> {
-                                                  ["id"] = "billToLastName",
-                                                  ["name"] = "billToLastName"
-                                              })" />
-                            </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Apellidos"
+                                      Placeholder="Perez Cedeño"
+                                      @bind-Value="BillToLastName"
+                                      ReadOnly="@OwnerReadOnly"
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      InputAttributes="@(new Dictionary<string, object> {
+                                        ["id"] = "billToLastName",
+                                        ["name"] = "billToLastName"
+                                      })" />
+                      </MudItem>
 
-                            <MudItem xs="12" sm="6">
-                                <MudTextField T="string"
-                                              Label="Cédula"
-                                              Placeholder="Solo números"
-                                              @bind-Value="CustomerId"
-                                              ReadOnly="@OwnerReadOnly"
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              InputType="InputType.Telephone"
-                                              InputAttributes="CustomerIdInputAttrs" />
-                            </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Cédula"
+                                      Placeholder="Solo números"
+                                      @bind-Value="CustomerId"
+                                      ReadOnly="@OwnerReadOnly"
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Telephone"
+                                      InputAttributes="CustomerIdInputAttrs" />
+                      </MudItem>
 
-                            <MudItem xs="12" sm="6">
-                                <MudTextField T="string"
-                                              Label="Teléfono"
-                                              Placeholder="8888-8888"
-                                              @bind-Value="BillToTelephone"
-                                              ReadOnly="@OwnerReadOnly"
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              InputType="InputType.Telephone"
-                                              InputAttributes="BillToTelephoneInputAttrs" />
-                            </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Teléfono"
+                                      Placeholder="8888-8888"
+                                      @bind-Value="BillToTelephone"
+                                      ReadOnly="@OwnerReadOnly"
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Telephone"
+                                      InputAttributes="BillToTelephoneInputAttrs" />
+                      </MudItem>
 
-                            <MudItem xs="12">
-                                <MudTextField T="string"
-                                              Label="Correo electrónico"
-                                              Placeholder="correo@dominio.com"
-                                              @bind-Value="BillToEmail"
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              InputAttributes="@(new Dictionary<string, object> {
-                                                  ["id"] = "billToEmail",
-                                                  ["name"] = "billToEmail",
-                                                  ["type"] = "email"
-                                              })" />
-                            </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Correo electrónico"
+                                      Placeholder="correo@dominio.com"
+                                      @bind-Value="BillToEmail"
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      InputAttributes="@(new Dictionary<string, object> {
+                                        ["id"] = "billToEmail",
+                                        ["name"] = "billToEmail",
+                                        ["type"] = "email"
+                                      })" />
+                      </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                      </MudItem>
 
-                            <MudItem xs="12" sm="6" Class="mt-2">
-                                <MudSelect T="string"
-                                           Label="País"
-                                           @bind-Value="BillToCountry"
-                                           Dense FullWidth Margin="Margin.Normal"
-                                           Variant="Variant.Outlined"
-                                           InputAttributes="CountryAttrs">
-                                    <MudSelectItem T="string" Value="@("CO")">Costa Rica</MudSelectItem>
-                                    <MudSelectItem T="string" Value="@("PA")">Panamá</MudSelectItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudSelect T="string"
+                                   Label="País"
+                                   @bind-Value="BillToCountry"
+                                   Dense FullWidth Margin="Margin.Normal"
+                                   Variant="Variant.Outlined"
+                                   InputAttributes="CountryAttrs">
+                                    <MudSelectItem T="string" Value="@("CO")">Costa Rica</MudSelectItem> 
+                                    <MudSelectItem T="string" Value="@("PA")">Panamá</MudSelectItem> 
                                     <MudSelectItem T="string" Value="@("CO")">Colombia</MudSelectItem>
-                                </MudSelect>
-                            </MudItem>
+                        </MudSelect>
+                      </MudItem>
 
-                            <MudItem xs="12" sm="6">
-                                <MudTextField T="string"
-                                              Label="Código postal"
-                                              Placeholder="@ZipPlaceholder"
-                                              @bind-Value="BillToZipPostCode"
-                                              Immediate MaxLength="10"
-                                              FullWidth Dense Margin="Margin.Normal"
-                                              Variant="Variant.Outlined"
-                                              InputType="InputType.Telephone"
-                                              Validation="ValidateZip"
-                                              InputAttributes="ZipAttrs" />
-                            </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Código postal"
+                                      Placeholder="@ZipPlaceholder"
+                                      @bind-Value="BillToZipPostCode"
+                                      Immediate MaxLength="10"
+                                      FullWidth Dense Margin="Margin.Normal"
+                                      Variant="Variant.Outlined"
+                                      InputType="InputType.Telephone"
+                                      Validation="ValidateZip"
+                                      InputAttributes="ZipAttrs" />
+                      </MudItem>
 
-                            <MudItem xs="12" sm="6">
-                                <MudTextField T="string"
-                                              Label="Ciudad"
-                                              Placeholder="Ej. SJO"
-                                              @bind-Value="BillToCity"
-                                              Immediate
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              Validation="ValidateCity"
-                                              InputAttributes="CityAttrs" />
-                            </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Ciudad"
+                                      Placeholder="Ej. SJO"
+                                      @bind-Value="BillToCity"
+                                      Immediate
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      Validation="ValidateCity"
+                                      InputAttributes="CityAttrs" />
+                      </MudItem>
 
-                            <MudItem xs="12" sm="6">
-                                <MudTextField T="string"
-                                              Label="Estado/Provincia"
-                                              Placeholder="Ej. SJO"
-                                              @bind-Value="BillToState"
-                                              Immediate
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              Validation="ValidateState"
-                                              InputAttributes="StateAttrs" />
-                            </MudItem>
+                      <MudItem xs="6" sm="6" md="6" lg="6" xl="6" xxl="6">
+                        <MudTextField T="string"
+                                      Label="Estado/Provincia"
+                                      Placeholder="Ej. SJO"
+                                      @bind-Value="BillToState"
+                                      Immediate
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      Validation="ValidateState"
+                                      InputAttributes="StateAttrs" />
+                      </MudItem>
 
-                            <MudItem xs="12">
-                                <MudTextField T="string"
-                                              Label="Dirección"
-                                              Placeholder="Calle 1, #123"
-                                              @bind-Value="BillToAddress"
-                                              Immediate
-                                              FullWidth Dense Margin="Margin.Dense"
-                                              Variant="Variant.Outlined"
-                                              Validation="ValidateAddress"
-                                              InputAttributes="Address1Attrs" />
-                            </MudItem>
-                        </MudGrid>
-                    </MudCardContent>
+                      <MudItem xs="12" sm="12" md="12" lg="12" xl="12" xxl="12">
+                        <MudTextField T="string"
+                                      Label="Dirección"
+                                      Placeholder="Calle 1, #123"
+                                      @bind-Value="BillToAddress"
+                                      Immediate
+                                      FullWidth Dense Margin="Margin.Dense"
+                                      Variant="Variant.Outlined"
+                                      Validation="ValidateAddress"
+                                      InputAttributes="Address1Attrs" />
+                      </MudItem>
+                    </MudGrid>
+                  </MudCardContent>
                 </MudCard>
 
-                <!-- Monto a cancelar (visual para tarjeta; en SINPE lo escribe el usuario) -->
+                <!-- Monto a cancelar (visual, solo tarjeta) -->
                 @if (SelectedPaymentMethod == PAYFAC)
                 {
-                    <MudItem xs="12" Class="d-flex justify-center mt-4">
-                        <MudStack Row Bold AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="3">
-                            <MudText Typo="Typo.h6">Monto a cancelar</MudText>
-                            <MudText Typo="Typo.subtitle1" Bold>@PayLabel</MudText>
-                        </MudStack>
-                    </MudItem>
+                  <div class="d-flex justify-center mt-4">
+                    <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="3">
+                      <MudText Typo="Typo.h6">Monto a cancelar</MudText>
+                      <MudText Typo="Typo.subtitle1" Bold="true">@PayLabel</MudText>
+                    </MudStack>
+                  </div>
                 }
 
-            </MudItem>
+              </MudItem>
+            </MudGrid>
 
-            <!-- Botón pagar -->
-            <MudItem xs="12" Class="d-flex justify-center mt-2">
-                <MudButton Id="btnPagar"
-                           Variant="Variant.Filled"
-                           Color="Color.Info"
-                           Disabled="@Pagando"
-                           OnClick="Pagar"
-                           Class="px-6 py-2">
-                    @(Pagando ? "Procesando…" : "Pagar")
-                </MudButton>
-            </MudItem>
-        </MudGrid>
+            <!-- Hidden base que lee el SDK -->
+            <input type="hidden" id="orderNumber" name="orderNumber" value="@OrderNumber" />
+            <input type="hidden" id="amount"      name="amount"      value="@AmountString" />
+            <input type="hidden" id="currency"    name="currency"    value="@Currency" />
+            <input type="hidden" id="redirect"    name="redirect"    value="@RedirectUrl" />
 
-        <!-- Hidden base que el SDK puede leer y que refresca Pagar() -->
-        <input type="hidden" id="orderNumber" name="orderNumber" value="@OrderNumber" />
-        <input type="hidden" id="amount"      name="amount"      value="@AmountString" />
-        <input type="hidden" id="currency"    name="currency"    value="@Currency" />
-        <input type="hidden" id="redirect"    name="redirect"    value="@RedirectUrl" />
+            <!-- Contenedor del SDK -->
+            <div id="responseTilopay" style="display:none"></div>
 
-        <!-- Contenedor que el SDK usa para inyectar su HTML -->
-        <div id="responseTilopay" style="display:none"></div>
+            @if (!string.IsNullOrWhiteSpace(Estado))
+            {
+              <MudAlert Severity="Severity.Info" Class="mt-3">@Estado</MudAlert>
+            }
 
-        @if (!string.IsNullOrWhiteSpace(Estado))
-        {
-            <MudAlert Severity="Severity.Info" Class="mt-3">@Estado</MudAlert>
-        }
-    </div>
-</MudContainer>
+        </div>
+
+      </MudCardContent>
+
+      <!-- Botón abajo siempre -->
+      <MudCardActions Class="sticky-actions d-flex justify-center">
+        <MudButton Id="btnPagar"
+                   Variant="Variant.Filled"
+                   Color="Color.Info"
+                   Disabled="@Pagando"
+                   OnClick="Pagar"
+                   Class="px-6 py-2">
+          @(Pagando ? "Procesando…" : "Pagar")
+        </MudButton>
+      </MudCardActions>
+    </MudCard>
+  </MudItem>
+</MudGrid>
 
 <style>
   /* el input necesita espacio a la derecha para los logos */
@@ -364,6 +361,36 @@
 .cc-brand{ top: calc(50% - 2px); }
 .mud-input-error .cc-brand{ top: calc(50% - 4px); }
   
+
+/* hace que el body y el root puedan estirarse */
+html, body, #app { height: 100%; }
+
+/* alto completo con soporte móvil (vh, svh, dvh) */
+.full-vh {
+  min-height: 100vh;
+  min-height: 100svh; 
+  min-height: 100dvh;   
+}
+
+.flex-col-fill {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 100%;
+}
+
+/* que el contenido empuje hacia abajo el botón */
+.grow { flex: 1 1 auto; }
+
+/* acciones pegadas al fondo del card (opcional: “sticky” bonito) */
+.sticky-actions {
+  position: sticky;
+  bottom: 0;
+  background: var(--mud-palette-surface);
+  padding: 12px 16px;
+  z-index: 1;
+}
+
   
 
 </style>
