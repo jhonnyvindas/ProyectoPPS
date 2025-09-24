@@ -5,32 +5,23 @@
 
 <MudGrid Justify="Justify.SpaceAround">
   <MudItem xs="12" sm="12" md="12" lg="6" xl="6" xxl="6">
-    <MudCard Class="flex-col-fill">
+    <MudCard>
       <MudCardContent Class="grow">
         <div id="payFormTilopay" class="payFormTilopay form-reset">
             <MudGrid Justify="Justify.Center">
-              <!-- Columna principal del formulario -->
               <MudItem>
-
-                <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-2">
+                <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-2" Color="Color.Info">
                   Pago de servicios
                 </MudText>
 
-                <!-- Método de pago -->
-                <MudCard Class="mb-3">
+                <MudCard Class="mb-3" Hidden="true">
                   <MudCardContent>
-                    <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Métodos de pago</MudText>
+                    <MudText Typo="Typo.subtitle1" Bold Class="mb-2">Método de pago</MudText>
+                    <MudAlert Severity="Severity.Info" Dense>
+                      Tarjeta (asignado automáticamente por el SDK)
+                    </MudAlert>
 
-                    <MudSelect T="string"
-                               @bind-Value="SelectedPaymentMethod"
-                               FullWidth Dense
-                               Margin="Margin.Dense"
-                               Variant="Variant.Outlined">
-                      <MudSelectItem T="string" Value="@PAYFAC">Tarjeta</MudSelectItem>
-                      <MudSelectItem T="string" Value="@SIMPE">SINPE Móvil</MudSelectItem>
-                    </MudSelect>
-
-                    <!-- Refuerzo para el SDK -->
+                    <!-- Hidden para el SDK -->
                     <input type="hidden"
                            id="tlpy_payment_method"
                            name="tlpy_payment_method"
@@ -38,9 +29,6 @@
                   </MudCardContent>
                 </MudCard>
 
-                <!-- Datos de la tarjeta -->
-                @if (SelectedPaymentMethod == PAYFAC)
-                {
                   <MudCard Class="mb-2">
                     <MudCardContent Class="py-1 px-3">
                       <MudText Typo="Typo.subtitle1" Bold Class="mb-1">Datos de la tarjeta</MudText>
@@ -122,7 +110,7 @@
                       </MudGrid>
                     </MudCardContent>
                   </MudCard>
-                }
+                
 
                 <!-- Datos del propietario -->
                 <MudCard Class="mb-2">
@@ -205,7 +193,7 @@
                                    Dense FullWidth Margin="Margin.Normal"
                                    Variant="Variant.Outlined"
                                    InputAttributes="CountryAttrs">
-                                    <MudSelectItem T="string" Value="@("CO")">Costa Rica</MudSelectItem> 
+                                    <MudSelectItem T="string" Value="@("CR")">Costa Rica</MudSelectItem> 
                                     <MudSelectItem T="string" Value="@("PA")">Panamá</MudSelectItem> 
                                     <MudSelectItem T="string" Value="@("CO")">Colombia</MudSelectItem>
                         </MudSelect>
@@ -264,15 +252,13 @@
                 </MudCard>
 
                 <!-- Monto a cancelar (visual, solo tarjeta) -->
-                @if (SelectedPaymentMethod == PAYFAC)
-                {
+
                   <div class="d-flex justify-center mt-4">
                     <MudStack Row="true" AlignItems="AlignItems.Center" Justify="Justify.Center" Spacing="3">
                       <MudText Typo="Typo.h6">Monto a cancelar</MudText>
                       <MudText Typo="Typo.subtitle1" Bold="true">@PayLabel</MudText>
                     </MudStack>
                   </div>
-                }
 
               </MudItem>
             </MudGrid>
@@ -311,14 +297,11 @@
 </MudGrid>
 
 <style>
-  /* el input necesita espacio a la derecha para los logos */
   .cc-input-pad input,
   .cc-input-pad .mud-input-input,
   .cc-input-pad .mud-input-slot{
-    padding-right: 190px !important;   /* súbelo/bájalo según el ancho de tus logos */
+    padding-right: 190px !important;   
   }
-
-  /* si usas un contenedor para logos a la derecha, mantenlo absoluto */
   .cc-brand{
     position: absolute;
     top: 50%;
@@ -330,7 +313,6 @@
     pointer-events: none;
   }
 
-  /* TAMAÑO de los íconos (forzado) */
   .cc-logo{
     height: 32px !important;       
     display: inline-block;
@@ -345,7 +327,6 @@
     transform: scale(1.05);
   }
 
-  /* contenedor de logos (lo tenías así) */
 .cc-brand{
   position:absolute;
   right:12px;
@@ -357,32 +338,9 @@
   pointer-events:none;
 }
 
-
 .cc-brand{ top: calc(50% - 2px); }
 .mud-input-error .cc-brand{ top: calc(50% - 4px); }
   
-
-/* hace que el body y el root puedan estirarse */
-html, body, #app { height: 100%; }
-
-/* alto completo con soporte móvil (vh, svh, dvh) */
-.full-vh {
-  min-height: 100vh;
-  min-height: 100svh; 
-  min-height: 100dvh;   
-}
-
-.flex-col-fill {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 100%;
-}
-
-/* que el contenido empuje hacia abajo el botón */
-.grow { flex: 1 1 auto; }
-
-/* acciones pegadas al fondo del card (opcional: “sticky” bonito) */
 .sticky-actions {
   position: sticky;
   bottom: 0;
@@ -390,8 +348,5 @@ html, body, #app { height: 100%; }
   padding: 12px 16px;
   z-index: 1;
 }
-
-  
-
 </style>
 

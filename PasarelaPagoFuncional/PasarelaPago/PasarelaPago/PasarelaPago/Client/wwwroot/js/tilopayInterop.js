@@ -1,8 +1,8 @@
-﻿// wwwroot/js/tilopayInterop.js
-window.tilopayInterop = (function () {
+﻿window.tilopayInterop = (function () {
     let _inited = false;
     let _busy = false;
     let _dotnetRef = null;
+    let _lastInitResult = null;
 
     function require(cond, msg) { if (!cond) throw new Error(msg); }
 
@@ -15,14 +15,12 @@ window.tilopayInterop = (function () {
         require(root, "No existe .payFormTilopay en el DOM");
     }
 
-    // --- NUEVO: el SDK inyecta HTML en #responseTilopay; si no existe lo creamos ---
     function ensureResponseContainer() {
         let c = document.getElementById("responseTilopay");
         if (!c) {
             c = document.createElement("div");
             c.id = "responseTilopay";
             c.style.display = "none";
-            // lo ponemos al final del body; sirve igual dentro del wrapper
             document.body.appendChild(c);
             console.log("[tilopayInterop] #responseTilopay creado");
         }
@@ -44,20 +42,51 @@ window.tilopayInterop = (function () {
         } catch { }
     }
 
-    // ------------------ INIT UNA SOLA VEZ ------------------
+    function pickPayfac(methods) {
+        if (!Array.isArray(methods) || methods.length === 0) return null;
+
+        const s = methods.find(m => typeof m === "string" && m.includes(":payfac:"));
+        if (s) return s;
+
+        const o = methods.find(m =>
+            m && typeof m === "object" &&
+            (
+                (typeof m.id === "string" && m.id.includes(":payfac:")) ||
+                (typeof m.type === "string" && m.type.toLowerCase() === "card")
+            )
+        );
+        if (o) return o.id || null;
+
+        return null;
+    }
+
     async function ensureInit(token, options, dotnetRef) {
         ensureSdk();
         require(!!token, "Token vacío para Init");
         ensureDom();
         ensureResponseContainer();
 
-        // **IMPORTANTE**: conserva o actualiza la referencia .NET aunque ya esté inicializado
         if (dotnetRef) _dotnetRef = dotnetRef;
 
         if (_inited) {
             if (options && typeof window.Tilopay?.updateOptions === "function") {
                 await window.Tilopay.updateOptions(options);
             }
+
+            try {
+                const methods =
+                    (await window.Tilopay?.getMethods?.()) ??
+                    window.Tilopay?.methods ??
+                    _lastInitResult?.methods ??
+                    [];
+                const payfac = pickPayfac(methods);
+                if (_dotnetRef && payfac) {
+                    await _dotnetRef.invokeMethodAsync('OnDefaultMethod', payfac);
+                } else {
+                    console.warn("[tilopayInterop] No hay método :payfac: disponible para esta moneda (update).");
+                }
+            } catch { }
+
             return true;
         }
 
@@ -67,8 +96,24 @@ window.tilopayInterop = (function () {
         require(typeof window.Tilopay.Init === "function", "Tilopay.Init no existe en el SDK");
 
         const initResult = await window.Tilopay.Init(cfg);
+        _lastInitResult = initResult;              
         _inited = true;
         console.log("[tilopayInterop] SDK inicializado ✔", initResult);
+
+
+        try {
+            const methods =
+                initResult?.methods ??
+                (await window.Tilopay?.getMethods?.()) ??
+                window.Tilopay?.methods ??
+                [];
+            const payfac = pickPayfac(methods);
+            if (_dotnetRef && payfac) {
+                await _dotnetRef.invokeMethodAsync('OnDefaultMethod', payfac);
+            } else {
+                console.warn("[tilopayInterop] No hay método :payfac: disponible para esta moneda (init).");
+            }
+        } catch { }
 
         return true;
     }
@@ -93,7 +138,6 @@ window.tilopayInterop = (function () {
         if (cards && cards.closest(".row")) cards.closest(".row").style.display = "none";
     }
 
-    // ------------------ Marca de tarjeta con el SDK ------------------
     async function getCardType() {
         try {
             ensureSdk();
@@ -102,11 +146,10 @@ window.tilopayInterop = (function () {
             const r = await window.Tilopay.getCardType();
             return (r?.message || r || "").toString().toLowerCase();
         } catch {
-            return ""; // sin console.error
+            return ""; 
         }
     }
 
-    // wwwroot/js/tilopayInterop.js
     function watchCardBrand(dotnetRef) {
         const ref = dotnetRef || _dotnetRef;
 
@@ -120,9 +163,8 @@ window.tilopayInterop = (function () {
 
             if (!el) return;
 
-            if (currentInput === el && bound) return; // ya está enlazado al mismo nodo
+            if (currentInput === el && bound) return; 
 
-            // si había un input anterior, limpia
             if (currentInput && currentInput._tlpyBrandHandler) {
                 currentInput.removeEventListener("input", currentInput._tlpyBrandHandler);
                 currentInput.removeEventListener("change", currentInput._tlpyBrandHandler);
@@ -137,9 +179,8 @@ window.tilopayInterop = (function () {
                     const brand = (r && (r.message || r.cardType || r.type || r.result || r) || "")
                         .toString().toLowerCase();
 
-                    // aunque venga vacío, pásalo para que el C# pueda “apagar” la anterior
                     if (ref) await ref.invokeMethodAsync("OnCardBrandChanged", brand || "");
-                } catch { /* no-op */ }
+                } catch {  }
             };
 
             el._tlpyBrandHandler = handler;
@@ -150,19 +191,14 @@ window.tilopayInterop = (function () {
             currentInput = el;
             bound = true;
 
-            // detección inmediata
             handler();
         };
 
-        // intenta enlazar ahora…
         bind();
-        // …y vuelve a intentar cada 500 ms por si MudBlazor reemplaza el nodo
         if (!watchCardBrand._interval) {
             watchCardBrand._interval = setInterval(bind, 500);
         }
     }
-
-
 
     // ------------------ PAY ------------------
     async function prepareAndPay() {
@@ -178,7 +214,6 @@ window.tilopayInterop = (function () {
         _busy = true;
 
         try {
-            //await maybeCancel();
 
             console.log("[tilopayInterop] startPayment()");
             const result = await window.Tilopay.startPayment();
@@ -195,12 +230,26 @@ window.tilopayInterop = (function () {
         }
     }
 
+    async function getPayfacMethod() {
+        try {
+            const methods =
+                (await window.Tilopay?.getMethods?.()) ??
+                window.Tilopay?.methods ??
+                _lastInitResult?.methods ??
+                [];
+            return pickPayfac(methods);
+        } catch {
+            return _lastInitResult?.methods ? pickPayfac(_lastInitResult.methods) : null;
+        }
+    }
+
     return {
         ensureInit,
         prepareAndPay,
         hideMethodAndCards,
         setDefaultMethod,
         getCardType,
-        watchCardBrand
+        watchCardBrand,
+        getPayfacMethod
     };
 })();

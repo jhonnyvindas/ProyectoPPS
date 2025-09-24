@@ -6,6 +6,8 @@ using PasarelaPago.Shared.Models;
 using System.Globalization;
 using System.Text.Json;
 using System.Net.Http.Json;
+using System.Linq;
+
 
 namespace PasarelaPago.Client.Pages.PagosTilopay;
 
@@ -20,13 +22,11 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     [Inject] protected HttpClient Http { get; set; } = default!;
 
-    public const string PAYFAC = "12:3:88802749:payfac:0:"; 
 
-    public const string SIMPE = "12:3:88802749:simpe:0:";  
+    public string? SelectedPaymentMethod { get; set; } = null;
 
-    public string SelectedPaymentMethod { get; set; } = PAYFAC;
-
-    public string? CardNumber { get; set; } = "4012000000020089";
+    public bool IsPayfac => (SelectedPaymentMethod?.Contains(":payfac:", StringComparison.OrdinalIgnoreCase) ?? false);
+    public string? CardNumber { get; set; } = "4012000000020089";
 
     public string? Expiry { get; set; } = "12/26";
 
@@ -46,7 +46,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     public string? BillToLastName { get; set; } = "User";
 
-    public string? CustomerId { get; set; }             // ← aquí escribes la CÉDULA
+    public string? CustomerId { get; set; }             
 
     public string? BillToTelephone { get; set; }
 
@@ -62,10 +62,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     public string? BillToAddress { get; set; } = "123 Main Street";
 
-
-
-    // Marca de tarjeta (desde el SDK)
-
     public string? CardBrand { get; set; }
 
     public int CvvMaxLen => CardBrand == "amex" ? 4 : 3;
@@ -77,7 +73,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public int CardNumberDigitsMax => CardBrand == "amex" ? 15 : 19;
 
     public string? ValidateCardNumber(string? v)
-
     {
 
         var digits = new string((v ?? "").Where(char.IsDigit).ToArray());
@@ -87,14 +82,13 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             return $"Número de tarjeta inválido ({digits.Length}/{CardNumberDigitsMax})";
 
         return null;
-
     }
 
     private string _orderNumber = Guid.NewGuid().ToString("N");
 
     public string OrderNumber => _orderNumber;
 
-    public decimal Amount { get; set; } = 1.00m;
+    public decimal Amount { get; set; } = 10.00m;
 
     public string Currency { get; set; } = "USD";
 
@@ -110,307 +104,174 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     private DotNetObjectReference<PagoTilopay>? _selfRef;
 
-    public string PayLabel => FormatPayLabel(
-
-    SelectedPaymentMethod == PAYFAC ? Amount : (SinpeAmount ?? Amount),
-
-    Currency
-
-  );
+    public string PayLabel => FormatPayLabel(Amount, Currency);
 
     public static string FormatPayLabel(decimal amount, string? currency)
-
     {
-
         currency = currency?.ToUpperInvariant();
-
         var symbol = currency switch { "CRC" => "₡", "USD" => "$", _ => "" };
-
         var culture = currency switch
-
         {
-
-            "CR" => new CultureInfo("es-CR"),
-
+            "CRC" => new CultureInfo("es-CR"),
             "USD" => new CultureInfo("en-US"),
-
             _ => CultureInfo.InvariantCulture
-
         };
-
         return symbol + amount.ToString("N2", culture);
-
     }
 
-    public IReadOnlyDictionary<string, object> PhoneInputAttrs => new Dictionary<string, object>
-
+    public IReadOnlyDictionary<string, object> PhoneInputAttrs => new Dictionary<string, object>
     {
-
         ["id"] = "sinpe_phone",
-
         ["name"] = "sinpe_phone",
-
         ["inputmode"] = "numeric",
-
         ["maxlength"] = "9"
-
     };
 
     public IReadOnlyDictionary<string, object> CustomerIdInputAttrs => new Dictionary<string, object>
-
     {
-
         ["id"] = "customerId",
-
         ["name"] = "customerId",
-
         ["inputmode"] = "numeric",
-
         ["maxlength"] = "12",
-
         ["pattern"] = "[0-9]*"
-
     };
 
     public IReadOnlyDictionary<string, object> BillToTelephoneInputAttrs => new Dictionary<string, object>
-
     {
-
         ["id"] = "billToTelephone",
-
         ["name"] = "billToTelephone",
-
         ["inputmode"] = "numeric",
-
         ["maxlength"] = "9",
-
         ["pattern"] = "[0-9]*"
-
     };
 
     public IReadOnlyDictionary<string, object> CountryAttrs => new Dictionary<string, object>
-
     {
-
         ["id"] = "billToCountry",
-
         ["name"] = "billToCountry"
-
     };
 
     public IReadOnlyDictionary<string, object> ZipAttrs => new Dictionary<string, object>
-
     {
-
         ["id"] = "billToZipPostCode",
-
         ["name"] = "billToZipPostCode",
-
         ["inputmode"] = "numeric",
-
         ["pattern"] = "[0-9]*"
-
     };
 
     public IReadOnlyDictionary<string, object> CityAttrs => new Dictionary<string, object>
-
     {
-
         ["id"] = "billToCity",
-
         ["name"] = "billToCity"
-
     };
 
     public IReadOnlyDictionary<string, object> StateAttrs => new Dictionary<string, object>
-
-    {
-
+   {
         ["id"] = "billToState",
-
         ["name"] = "billToState"
-
     };
 
     public IReadOnlyDictionary<string, object> Address1Attrs => new Dictionary<string, object>
-
     {
-
         ["id"] = "billToAddress",
-
         ["name"] = "billToAddress"
-
     };
 
     protected override void OnInitialized()
-
     {
-
-        _selfRef = DotNetObjectReference.Create(this);
-
+       _selfRef = DotNetObjectReference.Create(this);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
-
     {
-
         if (!firstRender) return;
-
-
-
         if (_selfRef is null)
-
             _selfRef = DotNetObjectReference.Create(this);
-
         try
-
         {
-
             var token = await Api.GetSdkTokenAsync();
 
             if (!string.IsNullOrWhiteSpace(token))
-
             {
-
                 var preOptions = new
-
                 {
-
                     orderNumber = OrderNumber,
-
                     amount = AmountString,
-
                     currency = Currency,
-
                     description = "preinit",
-
                     language = "es",
-
                     capture = "1",
-
                     redirect = BuildRedirectUrl("/pagos/resultado"),
 
-                    paymentMethod = PAYFAC
-
                 };
-
                 await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, preOptions, _selfRef);
-
                 await JS.InvokeVoidAsync("tilopayInterop.watchCardBrand", _selfRef);
-
             }
-
         }
 
-        catch { /* si falla, sólo no habrá detección de marca */ }
-
-
+        catch {  }
 
         await JS.InvokeVoidAsync("tilopayInterop.watchCardBrand", _selfRef);
-
     }
 
     public async ValueTask DisposeAsync()
-
     {
-
         _selfRef?.Dispose();
 
         await Task.CompletedTask;
-
     }
-
-
-
-    // --- Helpers redirect ---
 
     private string BuildRedirectUrl(string path) => BuildRedirectUrl(path, null);
 
-
-
     private string BuildRedirectUrl(string path, IDictionary<string, string?>? query)
-
     {
-
         var uri = new Uri(Nav.Uri);
-
         var scheme = "https";
-
         var host = uri.Host;
-
         var port = uri.IsDefaultPort ? "" : $":{uri.Port}";
-
         var baseUrl = $"{scheme}://{host}{port}{path}";
 
-
-
         if (query is null || query.Count == 0) return baseUrl;
-
-
 
         var parts = new List<string>(query.Count);
 
         foreach (var kv in query)
-
         {
-
             if (string.IsNullOrWhiteSpace(kv.Key)) continue;
-
             if (string.IsNullOrWhiteSpace(kv.Value)) continue;
-
             parts.Add($"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value!)}");
-
         }
 
         var qs = string.Join("&", parts);
-
         return parts.Count > 0 ? $"{baseUrl}?{qs}" : baseUrl;
 
     }
+
     public string? ValidateExpiry(string? v)
-
     {
-
         if (string.IsNullOrWhiteSpace(v)) return "Fecha requerida";
-
         var parts = v.Split('/');
-
         if (parts.Length != 2) return "Formato MM/YY";
-
         if (!int.TryParse(parts[0], out var mm) || mm < 1 || mm > 12) return "Mes inválido";
-
         if (!int.TryParse(parts[1], out var yy)) return "Año inválido";
-
         var now = DateTime.UtcNow; var curYY = now.Year % 100; var curMM = now.Month;
-
         var ok = (yy > curYY) || (yy == curYY && mm >= curMM);
-
         return ok ? null : "Tarjeta vencida";
-
     }
 
 
     public string? ValidateCVV(string? v)
-
     {
-
         var digits = new string((v ?? "").Where(char.IsDigit).ToArray());
-
         return digits.Length == CvvMaxLen ? null : $"CVV de {CvvMaxLen} dígitos";
-
     }
 
 
     public string? ValidatePhone(string? v)
-
     {
-
         if (string.IsNullOrWhiteSpace(v)) return "Teléfono requerido";
-
         var d = new string(v.Where(char.IsDigit).ToArray());
-
         return d.Length == 8 ? null : "Use formato ####-####";
-
     }
 
 
@@ -427,283 +288,152 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
 
     public string ZipPlaceholder =>
-
       (BillToCountry ?? "CR").ToUpperInvariant() switch
-
       {
-
           "CR" => "10101",
-
           "PA" => "0801",
-
           "CO" => "110111",
-
           _ => "Código postal"
-
       };
 
     private string ToInvariantAmount(decimal amount)
-
       => amount.ToString("F2", CultureInfo.InvariantCulture);
 
+    private string MetodoPagoParaBD() => "payfac";
 
-    private string MetodoPagoParaBD() =>
-
-    SelectedPaymentMethod == PAYFAC ? "payfac" :
-
-    SelectedPaymentMethod == SIMPE ? "simpe" : "payfac";
-
-    public async Task Pagar()
-
+    public async Task Pagar()
     {
-
         if (Pagando) return;
-
         Pagando = true;
 
-
-
         try
-
         {
-
             if (string.IsNullOrWhiteSpace(CustomerId))
-
             {
-
                 Estado = "Debe indicar la cédula del cliente.";
-
                 return;
-
             }
-
-
 
             Estado = "Obteniendo token…";
-
             StateHasChanged();
-
-
 
             var token = await Api.GetSdkTokenAsync();
-
             if (string.IsNullOrWhiteSpace(token))
-
             {
-
                 Estado = "No se obtuvo token del servidor.";
-
                 return;
-
             }
 
-
-
-            var amountToPay = SelectedPaymentMethod == PAYFAC
-
-              ? Amount
-
-              : (SinpeAmount ?? 0m);
-
-
-
-            if (SelectedPaymentMethod == SIMPE && amountToPay <= 0m)
-
+            if (string.IsNullOrWhiteSpace(SelectedPaymentMethod) || !IsPayfac)
             {
-
-                Estado = "Monto SINPE inválido.";
-
-                return;
-
+                try
+                {
+                    var payfac = await JS.InvokeAsync<string>("tilopayInterop.getPayfacMethod");
+                    if (!string.IsNullOrWhiteSpace(payfac))
+                        SelectedPaymentMethod = payfac;
+                }
+                catch { }
             }
 
-
+            if (string.IsNullOrWhiteSpace(SelectedPaymentMethod) || !IsPayfac)
+            {
+                Estado = "No hay método de tarjeta disponible para la moneda seleccionada.";
+                return;
+            }
 
             _orderNumber = Guid.NewGuid().ToString("N");
-
             StateHasChanged();
-
-
 
             Estado = "Inicializando SDK…";
-
             StateHasChanged();
 
-
-            var redirectUrl = BuildRedirectUrl("/pagos/resultado", new Dictionary<string, string?>
-
+            var redirectUrl = BuildRedirectUrl("/pagos/resultado", new Dictionary<string, string?>
             {
-
-                ["amount"] = ToInvariantAmount(amountToPay),
-
+                ["amount"] = ToInvariantAmount(Amount),
                 ["currency"] = Currency,
-
                 ["billToFirstName"] = BillToFirstName,
-
                 ["billToLastName"] = BillToLastName,
-
                 ["billToCountry"] = BillToCountry,
-
                 ["customerId"] = CustomerId,
-
                 ["email"] = BillToEmail
-
             });
 
-
-
             var options = new
-
             {
-
                 orderNumber = _orderNumber,
-
-                amount = ToInvariantAmount(amountToPay),
-
+                amount = ToInvariantAmount(Amount),
                 currency = Currency,
-
                 description = "Pago de servicios",
-
                 language = "es",
-
                 capture = "1",
-
                 redirect = redirectUrl,
-
                 billToEmail = BillToEmail,
-
                 billToFirstName = BillToFirstName,
-
                 billToLastName = BillToLastName,
-
                 billToAddress = BillToAddress,
-
                 billToCity = BillToCity,
-
                 billToCountry = BillToCountry,
-
                 billToState = BillToState,
-
                 billToZipPostCode = BillToZipPostCode,
-
                 billToTelephone = BillToTelephone,
-
                 subscription = 0,
-
                 hashVersion = "V2",
-
-                paymentMethod = SelectedPaymentMethod
-
+                paymentMethod = SelectedPaymentMethod 
             };
-
-
 
             await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, options, _selfRef);
 
-
-
             try
-
             {
-
                 var brand = await JS.InvokeAsync<string>("tilopayInterop.getCardType");
-
                 if (!string.IsNullOrWhiteSpace(brand))
-
                 {
-
                     CardBrand = brand.ToLowerInvariant();
-
                     StateHasChanged();
-
                 }
-
             }
-
-            catch { /* no-op */ }
-
-
+            catch { }
 
             Estado = "Invocando checkout…";
-
             StateHasChanged();
-
-
 
             await JS.InvokeVoidAsync("tilopayInterop.prepareAndPay");
 
-
-
             Estado = "Esperando confirmación del banco…";
-
         }
-
         catch (JSException jse)
-
         {
-
             Estado = $"Error JS/SDK: {jse.Message}";
-
         }
-
         catch (Exception ex)
-
         {
-
             Estado = $"Error: {ex.Message}";
-
         }
-
         finally
-
         {
-
             Pagando = false;
-
             StateHasChanged();
-
         }
-
     }
-
 
 
     [JSInvokable]
 
     public async Task OnPaymentEvent(PaymentEvent evt)
-
     {
-
         var status = (evt?.status ?? "").ToLowerInvariant();
 
-
-
         if (status == "success" || status == "approved" || status == "ok" || status == "completed")
-
         {
-
             var cedula = (CustomerId ?? "").Trim();
-
             if (string.IsNullOrWhiteSpace(cedula))
-
             {
-
                 Estado = "No se pudo registrar: cédula vacía.";
-
                 StateHasChanged();
-
                 return;
-
             }
 
-
-
-            decimal amountToPay = (SelectedPaymentMethod == PAYFAC)
-
-              ? Amount
-
-              : (SinpeAmount ?? 0m);
-
+            decimal amountToPay = Amount;
 
 
             if (amountToPay <= 0m)
@@ -837,62 +567,42 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
 
     [JSInvokable]
-
     public Task OnCardBrandChanged(string brand)
-
     {
-
-        CardBrand = string.IsNullOrWhiteSpace(brand) ? null : brand.ToLowerInvariant();
-
+       CardBrand = string.IsNullOrWhiteSpace(brand) ? null : brand.ToLowerInvariant();
         StateHasChanged();
-
         return Task.CompletedTask;
-
     }
 
-
-
-    public sealed class PaymentEvent
-
+    [JSInvokable]
+    public Task OnDefaultMethod(string methodId)
     {
-
-        public string? status { get; set; }
-
-        public object? payload { get; set; }
-
+        if (!string.IsNullOrWhiteSpace(methodId) && methodId.Contains(":payfac:", StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedPaymentMethod = methodId; // ← método tarjeta válido para la moneda actual
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
     }
-
-
-
-    // --- Logo de la marca detectada ---
+    public sealed class PaymentEvent
+    {
+        public string? status { get; set; }
+        public object? payload { get; set; }
+    }
 
     private static readonly Dictionary<string, string> _brandLogos = new(StringComparer.OrdinalIgnoreCase)
-
     {
-
         ["visa"] = "/img/visa.png",
-
         ["mastercard"] = "/img/mastercard.png",
-
         ["amex"] = "/img/amex.png",
-
     };
 
-
-
     private static string? GetBrandLogo(string? brand)
-
     {
-
         if (!string.IsNullOrWhiteSpace(brand) && _brandLogos.TryGetValue(brand.Trim(), out var path))
-
-            return path;
-
+           return path;
         return null;
-
     }
-
-
 
     public string BrandLogoSrc => GetBrandLogo(CardBrand) ?? string.Empty;
 
