@@ -56,7 +56,9 @@ public class TransaccionController : ControllerBase
     [HttpGet("dashboard")]
     public async Task<ActionResult<PaginacionResponse<DTOTransacciones>>> GetTransacciones([FromQuery] FiltroTransacciones filtro)
     {
-        var query = _svc.Transacciones.Include(p => p.Cliente).AsQueryable();
+        try
+        {
+            var query = _svc.Transacciones.Include(p => p.Cliente).AsQueryable();
 
         if (filtro.FechaInicio.HasValue)
         {
@@ -116,6 +118,14 @@ public class TransaccionController : ControllerBase
             TotalRegistros = total,
             Resultados = data
         });
+        }
+        catch (Exception ex)
+        {
+
+            return BadRequest(ex.Message);
+        }
+
+        
     }
 
 }

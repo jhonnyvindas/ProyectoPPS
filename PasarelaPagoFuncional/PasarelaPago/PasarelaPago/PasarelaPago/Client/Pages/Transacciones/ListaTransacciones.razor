@@ -62,7 +62,7 @@
                         @ToCurrencyName(((DTOTransacciones)row).moneda)
                     </Template>
                 </GridColumn>
-                <GridColumn Field=@nameof(DTOTransacciones.monto) HeaderText="Monto" Type="ColumnType.Number" Width="100" />
+                <GridColumn Field=@nameof(DTOTransacciones.monto) HeaderText="Monto" Type="ColumnType.Number" Width="100" Format="N2" />
                 <GridColumn Field=@nameof(DTOTransacciones.numeroOrden) HeaderText="# Orden" Type="ColumnType.String" Width="120" />
                 <GridColumn Field=@nameof(DTOTransacciones.fechaTransaccion) HeaderText="Fecha" Type="ColumnType.DateTime" Format="dd/MM/yyyy" Width="150" />
                 <GridColumn Field=@nameof(DTOTransacciones.estadoTransaccion)
