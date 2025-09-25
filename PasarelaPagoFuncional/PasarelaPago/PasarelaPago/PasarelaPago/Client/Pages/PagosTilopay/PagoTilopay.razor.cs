@@ -71,6 +71,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     private bool ShowFailModal { get; set; } = false;
     private string? FailReason { get; set; }
 
+    // Evita doble persistencia en un mismo intento
+    private bool _persistedThisAttempt = false;
+
     public string PayLabel => FormatPayLabel(Amount, Currency);
     public static string FormatPayLabel(decimal amount, string? currency)
     {
@@ -240,6 +243,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public async Task Pagar()
     {
         if (Pagando) return;
+        _persistedThisAttempt = false; // reset para este intento
         Pagando = true;
         ShowFailModal = false;
 
@@ -339,11 +343,15 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         catch (JSException jse)
         {
             Estado = $"Error JS/SDK: {jse.Message}";
+            if (!_persistedThisAttempt)
+                await GuardarTransaccionAsync("error_sdk", new { message = jse.Message });
             ShowFailure("Ocurrió un problema con el SDK. Intente nuevamente.");
         }
         catch (Exception ex)
         {
             Estado = $"Error: {ex.Message}";
+            if (!_persistedThisAttempt)
+                await GuardarTransaccionAsync("error_unexpected", new { message = ex.Message });
             ShowFailure("Ocurrió un problema inesperado. Intente nuevamente.");
         }
         finally
@@ -360,78 +368,39 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         await JS.InvokeVoidAsync("tilopayInterop.clearWatchdog");
         var status = (evt?.status ?? "").ToLowerInvariant();
 
-        if (status == "approved")
+        try
         {
-            var cedula = (CustomerId ?? "").Trim();
-            if (string.IsNullOrWhiteSpace(cedula))
+            // Guardamos SIEMPRE. Para "approved" se aplican validaciones más estrictas dentro del helper.
+            await GuardarTransaccionAsync(status, evt?.payload);
+
+            if (status == "approved")
             {
-                Estado = "No se pudo registrar: cédula vacía.";
-                StateHasChanged();
-                return;
+                Estado = "Pago aprobado. Datos guardados.";
             }
-
-            var amountToPay = Amount;
-            if (amountToPay <= 0m)
+            else
             {
-                Estado = "Monto inválido. No se puede registrar el pago.";
-                StateHasChanged();
-                return;
-            }
-
-            string? payloadTexto = null;
-            try { payloadTexto = JsonSerializer.Serialize(evt?.payload); }
-            catch { payloadTexto = evt?.payload?.ToString(); }
-
-            var cliente = new Cliente
-            {
-                cedula = cedula,
-                nombre = BillToFirstName,
-                apellido = BillToLastName,
-                correo = BillToEmail,
-                telefono = BillToTelephone,
-                direccion = BillToAddress,
-                ciudad = BillToCity,
-                provincia = BillToState,
-                codigoPostal = BillToZipPostCode,
-                pais = BillToCountry
-            };
-
-            var pago = new Pago
-            {
-                numeroOrden = _orderNumber,
-                cedula = cedula,
-                metodoPago = MetodoPagoParaBD(),
-                monto = amountToPay,
-                moneda = (Currency ?? "USD").ToUpperInvariant(),
-                estadoTilopay = status,
-                datosRespuestaTilopay = payloadTexto,
-                fechaTransaccion = DateTime.UtcNow,
-                marcaTarjeta = (CardBrand ?? "").ToLowerInvariant()
-            };
-
-            var payload = new PagoConCliente { Cliente = cliente, Pago = pago };
-
-            try
-            {
-                var resp = await Http.PostAsJsonAsync("api/Transaccion", payload);
-                if (resp.IsSuccessStatusCode)
-                    Estado = "Pago aprobado. Datos guardados.";
-                else
-                    Estado = $"Error al guardar datos: {(int)resp.StatusCode} {resp.ReasonPhrase}";
-            }
-            catch (Exception ex)
-            {
-                Estado = $"Error al guardar datos: {ex.Message}";
+                var msg = evt?.payload?.ToString() ?? status;
+                Estado = $"Pago rechazado o no confirmado ({status}): {msg}";
+                ShowFailure("La transacción no pudo ser efectuada. Intente nuevamente.");
             }
         }
-        else
+        catch (Exception ex)
         {
-            var msg = evt?.payload?.ToString() ?? status;
-            Estado = $"Pago rechazado o no confirmado ({status}): {msg}";
-            ShowFailure("La transacción no pudo ser efectuada. Intente nuevamente.");
+            Estado = $"Error al guardar datos: {ex.Message}";
+            ShowFailure("Ocurrió un problema al registrar la transacción.");
         }
 
         StateHasChanged();
+    }
+
+    [JSInvokable]
+    public async Task OnPaymentTimeout()
+    {
+        // Persistimos como TIMEOUT si todavía no se guardó en este intento
+        if (!_persistedThisAttempt)
+            await GuardarTransaccionAsync("timeout", new { reason = "watchdog_timeout" });
+
+        ShowFailure("Tiempo de espera agotado. No fue posible completar la transacción.");
     }
 
     [JSInvokable]
@@ -454,17 +423,89 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    [JSInvokable]
-    public Task OnPaymentTimeout()
+    // ----- Persistencia unificada -----
+    private async Task GuardarTransaccionAsync(string status, object? payloadObj)
     {
-        ShowFailure("Tiempo de espera agotado. No fue posible completar la transacción.");
-        return Task.CompletedTask;
+        if (_persistedThisAttempt) return; // ya guardado en este intento
+
+        // 1) Serializa payload
+        string? payloadTexto;
+        try { payloadTexto = JsonSerializer.Serialize(payloadObj); }
+        catch { payloadTexto = payloadObj?.ToString(); }
+
+        // 2) Datos y saneo
+        var cedula = (CustomerId ?? "").Trim();
+        var amountToPay = Amount;
+
+        if (status == "approved")
+        {
+            // Validaciones estrictas solo para aprobadas
+            if (string.IsNullOrWhiteSpace(cedula))
+                throw new InvalidOperationException("Cédula requerida para transacción aprobada.");
+            if (amountToPay <= 0m)
+                throw new InvalidOperationException("Monto inválido en transacción aprobada.");
+        }
+        else
+        {
+            // Para no aprobadas/timeout/errores: permitir guardar aunque falte info
+            if (string.IsNullOrWhiteSpace(cedula))
+                cedula = "SIN_CEDULA";
+            if (amountToPay < 0m)
+                amountToPay = 0m;
+        }
+
+        var cliente = new Cliente
+        {
+            cedula = cedula,
+            nombre = BillToFirstName ?? "",
+            apellido = BillToLastName ?? "",
+            correo = BillToEmail,
+            telefono = BillToTelephone,
+            direccion = BillToAddress,
+            ciudad = BillToCity,
+            provincia = BillToState,
+            codigoPostal = BillToZipPostCode,
+            pais = BillToCountry
+        };
+
+        var pago = new Pago
+        {
+            numeroOrden = _orderNumber,
+            cedula = cedula,
+            metodoPago = MetodoPagoParaBD(),
+            monto = amountToPay,
+            moneda = (Currency ?? "USD").ToUpperInvariant(),
+            estadoTilopay = NormalizarEstadoParaBD(status),
+            datosRespuestaTilopay = payloadTexto,
+            fechaTransaccion = DateTime.UtcNow,
+            marcaTarjeta = (CardBrand ?? "").ToLowerInvariant()
+        };
+
+        var payload = new PagoConCliente { Cliente = cliente, Pago = pago };
+
+        var resp = await Http.PostAsJsonAsync("api/Transaccion", payload);
+        if (!resp.IsSuccessStatusCode)
+        {
+            var reason = $"{(int)resp.StatusCode} {resp.ReasonPhrase}";
+            throw new InvalidOperationException($"Error al guardar datos: {reason}");
+        }
+
+        _persistedThisAttempt = true; // marcado: ya persistimos este intento
     }
 
     public sealed class PaymentEvent
     {
         public string? status { get; set; }
         public object? payload { get; set; }
+    }
+
+    private static string NormalizarEstadoParaBD(string statusRaw)
+    {
+        var s = (statusRaw ?? "").Trim().ToLowerInvariant();
+
+        if (s == "approved") return "aprobado";
+
+        return "rechazado";
     }
 
     private static readonly Dictionary<string, string> _brandLogos = new(StringComparer.OrdinalIgnoreCase)

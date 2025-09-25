@@ -78,7 +78,10 @@
 
                             bool rechazado =
                             s == "failed" || s == "rechazado" || s == "declined" ||
-                            s == "canceled" || s == "cancelled" || s == "error";
+                            s == "canceled" || s == "cancelled" || s == "error" ||
+                            s == "timeout" || s == "expired" || s == "voided" ||
+                            s == "denied" || s == "refused" || s == "not_approved" ||
+                            s == "unknown";
                         }
                         @if (aprobado)
                         {

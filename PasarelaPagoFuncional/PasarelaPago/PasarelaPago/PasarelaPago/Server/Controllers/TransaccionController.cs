@@ -58,74 +58,96 @@ public class TransaccionController : ControllerBase
     {
         try
         {
-            var query = _svc.Transacciones.Include(p => p.Cliente).AsQueryable();
+            // Lista canónica de estados "exitosos"
+            var success = new[] { "approved", "success", "captured", "completed", "paid", "aprobado" };
 
-        if (filtro.FechaInicio.HasValue)
-        {
-            query = query.Where(t => t.fechaTransaccion >= filtro.FechaInicio.Value.ToUniversalTime());
-        }
+            var query = _svc.Transacciones
+                .AsNoTracking()
+                .Include(p => p.Cliente)
+                .AsQueryable();
 
-        if (filtro.FechaFin.HasValue)
-        {
-            query = query.Where(t => t.fechaTransaccion <= filtro.FechaFin.Value.ToUniversalTime());
-        }
-
-        if (!string.IsNullOrWhiteSpace(filtro.EstadoTransaccion))
-        {
-            var e = filtro.EstadoTransaccion.Trim().ToLower();
-            var canon = e switch
+            // Fechas: inicio inclusivo, fin exclusivo (día siguiente) en UTC
+            if (filtro.FechaInicio.HasValue)
             {
-                "aprobado" => "success",
-                "rechazado" => "failed",
-                _ => e
-            };
-
-            query = query.Where(t => (t.estadoTilopay ?? "").ToLower() == canon);
-        }
-
-        if (!string.IsNullOrWhiteSpace(filtro.Busqueda))
-        {
-            var busqueda = $"%{filtro.Busqueda.ToLower()}%";
-            query = query.Where(t =>
-                EF.Functions.Like((t.Cliente.nombre ?? "").ToLower(), busqueda) ||
-                EF.Functions.Like((t.Cliente.apellido ?? "").ToLower(), busqueda) ||
-                EF.Functions.Like((t.cedula ?? "").ToLower(), busqueda) ||
-                EF.Functions.Like((t.numeroOrden ?? "").ToLower(), busqueda)
-            );
-        }
-
-        var total = await query.CountAsync();
-
-        var data = await query
-            .OrderByDescending(t => t.fechaTransaccion)
-            .Skip((filtro.Pagina - 1) * filtro.Tamanio)
-            .Take(filtro.Tamanio)
-            .Select(t => new DTOTransacciones
+                var fi = DateTime.SpecifyKind(filtro.FechaInicio.Value.Date, DateTimeKind.Utc);
+                query = query.Where(t => t.fechaTransaccion >= fi);
+            }
+            if (filtro.FechaFin.HasValue)
             {
-                cedula = t.cedula,
-                nombreCliente = t.Cliente != null ? $"{t.Cliente.nombre} {t.Cliente.apellido}" : "Desconocido",
-                pais = t.Cliente != null ? t.Cliente.pais : "Desconocido",
-                monto = t.monto,
-                moneda = t.moneda,
-                numeroOrden = t.numeroOrden,
-                estadoTransaccion = t.estadoTilopay,
-                fechaTransaccion = t.fechaTransaccion
-            })
-            .ToListAsync();
+                var ff = DateTime.SpecifyKind(filtro.FechaFin.Value.Date.AddDays(1), DateTimeKind.Utc);
+                query = query.Where(t => t.fechaTransaccion < ff);
+            }
 
-        return Ok(new PaginacionResponse<DTOTransacciones>
-        {
-            TotalRegistros = total,
-            Resultados = data
-        });
+            // Filtro por estado desde la UI
+            if (!string.IsNullOrWhiteSpace(filtro.EstadoTransaccion))
+            {
+                var estado = filtro.EstadoTransaccion.Trim().ToLowerInvariant();
+
+                if (estado == "aprobado")
+                {
+                    query = query.Where(t =>
+                        t.estadoTilopay != null &&
+                        success.Contains(t.estadoTilopay.ToLower())
+                    );
+                }
+                else if (estado == "rechazado")
+                {
+                    // Todo lo que NO es éxito
+                    query = query.Where(t =>
+                        t.estadoTilopay == null ||
+                        !success.Contains(t.estadoTilopay.ToLower())
+                    );
+                }
+                // "Todos" => sin filtro
+            }
+
+            // Búsqueda
+            if (!string.IsNullOrWhiteSpace(filtro.Busqueda))
+            {
+                var busq = $"%{filtro.Busqueda.ToLower()}%";
+                query = query.Where(t =>
+                    EF.Functions.Like((t.Cliente!.nombre ?? "").ToLower(), busq) ||
+                    EF.Functions.Like((t.Cliente!.apellido ?? "").ToLower(), busq) ||
+                    EF.Functions.Like((t.cedula ?? "").ToLower(), busq) ||
+                    EF.Functions.Like((t.numeroOrden ?? "").ToLower(), busq)
+                );
+            }
+
+            var total = await query.CountAsync();
+
+            var data = await query
+                .OrderByDescending(t => t.fechaTransaccion)
+                .Skip((filtro.Pagina - 1) * filtro.Tamanio)
+                .Take(filtro.Tamanio)
+                .Select(t => new DTOTransacciones
+                {
+                    cedula = t.cedula,
+                    nombreCliente = t.Cliente != null ? $"{t.Cliente.nombre} {t.Cliente.apellido}" : "Desconocido",
+                    pais = t.Cliente != null ? t.Cliente.pais : "Desconocido",
+                    monto = t.monto,
+                    moneda = t.moneda,
+                    numeroOrden = t.numeroOrden,
+                    fechaTransaccion = t.fechaTransaccion,
+
+                    // Normaliza para UI/filtros: solo "aprobado" o "rechazado"
+                    estadoTransaccion = t.estadoTilopay != null && success.Contains(t.estadoTilopay.ToLower())
+                        ? "aprobado"
+                        : "rechazado"
+                })
+                .ToListAsync();
+
+            return Ok(new PaginacionResponse<DTOTransacciones>
+            {
+                TotalRegistros = total,
+                Resultados = data
+            });
         }
         catch (Exception ex)
         {
-
             return BadRequest(ex.Message);
         }
-
-        
     }
+
+
 
 }
