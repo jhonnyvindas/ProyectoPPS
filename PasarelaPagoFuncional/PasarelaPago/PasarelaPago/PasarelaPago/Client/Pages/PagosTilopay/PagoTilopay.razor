@@ -279,6 +279,9 @@
 
         </div>
 
+      
+
+
       </MudCardContent>
 
       <!-- Botón abajo siempre -->
@@ -295,6 +298,38 @@
     </MudCard>
   </MudItem>
 </MudGrid>
+
+<MudOverlay Visible="@ShowFailModal" DarkBackground="true">
+    <MudPaper Elevation="12"
+              Class="d-flex flex-column align-center justify-center"
+              Style="width:min(640px,95vw); border-radius:20px; padding:48px 32px; text-align:center;">
+        
+        <MudIcon Icon="@Icons.Material.Filled.ReportGmailerrorred"
+                 Size="Size.Large"
+                 Color="Color.Error"
+                 Class="mb-4" />
+
+        <MudText Typo="Typo.h5" Align="Align.Center" Class="mb-2">
+            Transacción no efectuada
+        </MudText>
+
+        <MudText Typo="Typo.subtitle2" Align="Align.Center" Class="mb-6">
+            @(string.IsNullOrWhiteSpace(FailReason)
+                ? "La transacción no pudo ser efectuada. Intente nuevamente."
+                : FailReason)
+        </MudText>
+
+        <MudButton Variant="Variant.Filled"
+                   Color="Color.Info"
+                   OnClick="OnFailOk"
+                   Class="px-6">
+            OK
+        </MudButton>
+    </MudPaper>
+</MudOverlay>
+
+
+
 
 <style>
   .cc-input-pad input,
@@ -348,5 +383,54 @@
   padding: 12px 16px;
   z-index: 1;
 }
+
+.fullscreen-modal{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.65);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999; 
+}
+.fullscreen-modal__content{
+  background: var(--mud-palette-surface);
+  color: var(--mud-palette-text-primary);
+  padding: 24px 28px;
+  border-radius: 16px;
+  max-width: 520px;
+  width: 92%;
+  box-shadow: 0 10px 40px rgba(0,0,0,.35);
+  text-align: center;
+}
+
+.fail-overlay{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.68);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999999; 
+}
+
+.fail-card{
+  background: var(--mud-palette-surface);
+  color: var(--mud-palette-text-primary);
+  width: min(520px, 92vw);
+  padding: 28px 24px;
+  border-radius: 16px;
+  box-shadow: 0 16px 48px rgba(0,0,0,.35);
+  text-align: center;
+}
+
+.fail-icon{
+  display:flex; align-items:center; justify-content:center;
+  width:64px; height:64px; margin:0 auto 12px auto;
+  border-radius:50%;
+  background: var(--mud-palette-error);
+  color: white;
+}
+
 </style>
 

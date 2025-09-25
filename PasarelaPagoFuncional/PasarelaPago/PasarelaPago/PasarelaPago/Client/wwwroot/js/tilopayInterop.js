@@ -3,6 +3,7 @@
     let _busy = false;
     let _dotnetRef = null;
     let _lastInitResult = null;
+    let _watchdog = null;
 
     function require(cond, msg) { if (!cond) throw new Error(msg); }
 
@@ -11,8 +12,8 @@
     }
 
     function ensureDom() {
-        const root = document.querySelector(".payFormTilopay");
-        require(root, "No existe .payFormTilopay en el DOM");
+        const root = document.getElementById("payFormTilopay") || document.querySelector(".payFormTilopay");
+        require(root, "No existe payFormTilopay en el DOM");
     }
 
     function ensureResponseContainer() {
@@ -42,6 +43,7 @@
         } catch { }
     }
 
+    // ---------- Helper: solo tarjeta (payfac) ----------
     function pickPayfac(methods) {
         if (!Array.isArray(methods) || methods.length === 0) return null;
 
@@ -60,6 +62,25 @@
         return null;
     }
 
+    // ---------- Helper: normalizar estado de pago ----------
+    function normalizePaymentStatus(result) {
+        let s = (result?.status ?? result?.result ?? result?.message ?? "")
+            .toString()
+            .toLowerCase();
+
+        const approvedFlag = result?.approved === true || result?.authorization === "approved";
+
+        if (approvedFlag || ["approved", "success", "ok", "paid", "completed", "authorized"].includes(s))
+            return "approved";
+
+        if (["denied", "declined", "rejected", "failed", "error", "cancelled", "canceled", "void", "refused"].includes(s))
+            return "rejected";
+
+        if (s === "timeout") return "timeout";
+        return "unknown"; // nunca asumimos success
+    }
+
+    // ------------------ INIT UNA SOLA VEZ ------------------
     async function ensureInit(token, options, dotnetRef) {
         ensureSdk();
         require(!!token, "Token vacío para Init");
@@ -96,10 +117,9 @@
         require(typeof window.Tilopay.Init === "function", "Tilopay.Init no existe en el SDK");
 
         const initResult = await window.Tilopay.Init(cfg);
-        _lastInitResult = initResult;              
+        _lastInitResult = initResult;
         _inited = true;
         console.log("[tilopayInterop] SDK inicializado ✔", initResult);
-
 
         try {
             const methods =
@@ -146,7 +166,7 @@
             const r = await window.Tilopay.getCardType();
             return (r?.message || r || "").toString().toLowerCase();
         } catch {
-            return ""; 
+            return "";
         }
     }
 
@@ -163,7 +183,7 @@
 
             if (!el) return;
 
-            if (currentInput === el && bound) return; 
+            if (currentInput === el && bound) return;
 
             if (currentInput && currentInput._tlpyBrandHandler) {
                 currentInput.removeEventListener("input", currentInput._tlpyBrandHandler);
@@ -180,7 +200,7 @@
                         .toString().toLowerCase();
 
                     if (ref) await ref.invokeMethodAsync("OnCardBrandChanged", brand || "");
-                } catch {  }
+                } catch { }
             };
 
             el._tlpyBrandHandler = handler;
@@ -214,14 +234,16 @@
         _busy = true;
 
         try {
-
             console.log("[tilopayInterop] startPayment()");
+            startWatchdog(70000);
+
             const result = await window.Tilopay.startPayment();
 
             console.log("[tilopayInterop] resultado:", result);
 
             if (_dotnetRef) {
-                const status = (result && (result.status || result.result)) || "success";
+                const status = normalizePaymentStatus(result);
+                clearWatchdog();
                 await _dotnetRef.invokeMethodAsync("OnPaymentEvent", { status, payload: result });
             }
             return result;
@@ -243,6 +265,73 @@
         }
     }
 
+    function startWatchdog(ms = 70000) {
+        clearWatchdog();
+        _watchdog = setTimeout(async () => {
+            console.warn("[tilopayInterop] Watchdog: tiempo agotado sin respuesta del SDK");
+            try {
+                if (_dotnetRef) await _dotnetRef.invokeMethodAsync('OnPaymentTimeout');
+            } catch { }
+        }, ms);
+    }
+
+    function clearWatchdog() {
+        if (_watchdog) { clearTimeout(_watchdog); _watchdog = null; }
+    }
+
+    function hardReload() {
+        try { location.reload(); } catch { }
+    }
+
+    async function prepareAndPayWithTimeout(timeoutMs = 7000) {
+        ensureSdk();
+        require(_inited, "SDK no inicializado; llama a ensureInit primero.");
+        ensureDom();
+        ensureResponseContainer();
+
+        if (_busy) {
+            console.warn("[tilopayInterop] ya hay un pago en proceso; ignorando.");
+            return { message: "Pago ya en proceso" };
+        }
+        _busy = true;
+
+        const timeoutErr = new Error("timeout");
+        let timeoutId;
+
+        const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => reject(timeoutErr), timeoutMs);
+        });
+
+        try {
+            console.log("[tilopayInterop] startPayment() con timeout =", timeoutMs, "ms");
+
+            const result = await Promise.race([
+                window.Tilopay.startPayment(),
+                timeoutPromise
+            ]);
+
+            clearTimeout(timeoutId);
+
+            console.log("[tilopayInterop] resultado:", result);
+            if (_dotnetRef) {
+                const status = normalizePaymentStatus(result);
+                await _dotnetRef.invokeMethodAsync("OnPaymentEvent", { status, payload: result });
+            }
+            return result;
+        } catch (err) {
+            if (err === timeoutErr) {
+                console.warn("[tilopayInterop] TIMEOUT: sin respuesta del SDK dentro del tiempo");
+                try { if (_dotnetRef) await _dotnetRef.invokeMethodAsync("OnPaymentTimeout"); } catch { }
+                return { status: "timeout" };
+            }
+            console.error("[tilopayInterop] error en startPayment:", err);
+            throw err;
+        } finally {
+            clearTimeout(timeoutId);
+            _busy = false;
+        }
+    }
+
     return {
         ensureInit,
         prepareAndPay,
@@ -250,6 +339,10 @@
         setDefaultMethod,
         getCardType,
         watchCardBrand,
-        getPayfacMethod
+        getPayfacMethod,
+        hardReload,
+        clearWatchdog,
+        startWatchdog,
+        prepareAndPayWithTimeout
     };
 })();
