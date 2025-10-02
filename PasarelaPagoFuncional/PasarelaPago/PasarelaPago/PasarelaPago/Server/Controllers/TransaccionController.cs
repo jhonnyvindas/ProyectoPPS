@@ -27,31 +27,33 @@ public class TransaccionController : ControllerBase
         public Pago Pago { get; set; } = default!;
     }
 
+
     [HttpPost]
-
     public async Task<IActionResult> Post([FromBody] PagoConCliente body)
-
     {
-
         if (body is null) return BadRequest("Cuerpo vacío.");
 
-        var ced = body.Cliente?.cedula ?? body.Pago?.cedula;
+        var ced = body.Cliente?.cedula ?? body.Pago?.cedula;
+        // Agregamos chequeo para el numeroOrden, que es el ID único.
+        var order = body.Pago?.numeroOrden;
 
         if (string.IsNullOrWhiteSpace(ced))
-
             return BadRequest("La cédula es requerida.");
 
+        if (string.IsNullOrWhiteSpace(order)) // <-- Validación crucial
+            return BadRequest("El número de orden (numeroOrden) es requerido.");
+
         body.Cliente ??= new Cliente { cedula = ced };
-
         body.Cliente.cedula = ced;
-
         body.Pago.cedula = ced;
 
+        // La lógica de UPSERT debe estar dentro de este servicio.
         await _svc.GuardarTransaccionAsync(body.Cliente, body.Pago);
 
         return Ok();
-
     }
+
+    // ... (código posterior)
 
     [HttpGet("dashboard")]
     public async Task<ActionResult<PaginacionResponse<DTOTransacciones>>> GetTransacciones([FromQuery] FiltroTransacciones filtro)

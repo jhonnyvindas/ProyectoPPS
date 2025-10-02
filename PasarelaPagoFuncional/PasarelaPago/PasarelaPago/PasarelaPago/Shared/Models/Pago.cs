@@ -1,4 +1,4 @@
-﻿// PasarelaPago.Shared/Models/Pago.cs
+﻿// PasarelaPago.Shared/Models/Pago.cs (CORREGIDO)
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -15,12 +15,14 @@ public class Pago
     [Column(TypeName = "varchar(64)")]
     public string numeroOrden { get; set; } = default!;
 
-    // FK a Clientes.cedula
-    [Required, MaxLength(25)]
+    // La propiedad 'cedula' actúa como la Foreign Key (FK)
+    [ForeignKey(nameof(Cliente))] // <--- Añadido para claridad de EF Core
+    [Required, MaxLength(25)]
     [Column("cedula", TypeName = "varchar(25)")]
     public string cedula { get; set; } = default!;
 
-    public Cliente? Cliente { get; set; }
+    // Propiedad de navegación
+    public Cliente? Cliente { get; set; }
 
     [Required, MaxLength(10)]
     [Column(TypeName = "varchar(10)")]
@@ -45,10 +47,13 @@ public class Pago
     [Column(TypeName = "varchar(12)")]
     public string? marcaTarjeta { get; set; }
 
-    // nvarchar(MAX) para guardar el JSON completo de Tilopay
-    [Column(TypeName = "nvarchar(max)")]
+    // nvarchar(MAX) para guardar el JSON completo de Tilopay
+    [Column(TypeName = "nvarchar(max)")]
     public string? datosRespuestaTilopay { get; set; }
 
     [Column(TypeName = "datetime2(6)")]
     public DateTime fechaTransaccion { get; set; }
+
+    // ❌ ¡ELIMINADA!
+    // public int ClienteId { get; set; } 
 }
