@@ -11,17 +11,14 @@
     }
     else
     {
-        <!-- Banda de estado -->
         <div class="banner @BannerCss">
             <MudIcon Icon="@BannerIcon" Size="Size.Large" Class="mr-2" />
             <MudText Typo="Typo.h5" Class="m-0">@BannerText</MudText>
         </div>
 
-        <!-- BLOQUE CLIENTE -->
         <MudCard Class="mt-3 shadow-sm">
             <MudCardContent Class="p-4">
                 <MudGrid Spacing="2">
-                    <!-- Cliente -->
                     @if (!string.IsNullOrWhiteSpace(Result.DisplayCustomer))
                     {
                         <MudItem xs="12" sm="6">
@@ -30,16 +27,14 @@
                         </MudItem>
                     }
 
-                    <!-- País -->
                     @if (!string.IsNullOrWhiteSpace(Result.Country))
                     {
                         <MudItem xs="12" sm="6">
                             <MudText Typo="Typo.subtitle1" Class="font-bold">País</MudText>
-                            <MudText>@Result.Country</MudText>
+                            <MudText>@GetCountryName(Result.Country)</MudText>
                         </MudItem>
                     }
 
-                    <!-- Cédula -->
                     @if (!string.IsNullOrWhiteSpace(Result.IdNumber))
                     {
                         <MudItem xs="12" sm="6">
@@ -48,7 +43,6 @@
                         </MudItem>
                     }
 
-                    <!-- Correo -->
                     @if (!string.IsNullOrWhiteSpace(Result.Email))
                     {
                         <MudItem xs="12" sm="6">
@@ -60,10 +54,18 @@
             </MudCardContent>
         </MudCard>
 
-        <!-- BLOQUE TRANSACCIÓN -->
         <MudCard Class="mt-3 shadow-sm">
             <MudCardContent Class="p-4">
                 <MudGrid Spacing="2">
+
+                    @if (TransactionDateTime != DateTime.MinValue)
+                    {
+                        <MudItem xs="12" sm="6">
+                            <MudText Typo="Typo.subtitle1" Class="font-bold">Fecha de Transacción</MudText>
+                            <MudText>@TransactionDateTime.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
+                        </MudItem>
+                    }
+
                     <MudItem xs="12" sm="6">
                         <MudText Typo="Typo.subtitle1" Class="font-bold">Descripción</MudText>
                         <MudText>@(Result.Description ?? "-")</MudText>
@@ -95,7 +97,6 @@
             </MudCardContent>
         </MudCard>
 
-        <!-- BLOQUE MONTO -->
         @if (!string.IsNullOrWhiteSpace(Result.AmountLabel))
         {
             <div class="amount-center">
@@ -108,7 +109,6 @@
             </div>
         }
 
-        <!-- Botón centrado -->
         <div class="d-flex justify-center mt-4 mb-4">
             <MudButton Variant="Variant.Filled" Color="Color.Info" OnClick="VolverInicio">
                 VOLVER AL INICIO
@@ -132,6 +132,7 @@
     }
 
     .banner-warning {
+        background: #f59e0b;
         background: #f59e0b;
     }
 

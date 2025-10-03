@@ -64,8 +64,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public string OrderNumber => _orderNumber;
 
     // Monto
-    public decimal Amount { get; set; } = 10.00m;
-    public string Currency { get; set; } = "USD";
+    public decimal Amount { get; set; } = 10000m;
+    public string Currency { get; set; } = "CRC";
     public string AmountString => Amount.ToString("F2", CultureInfo.InvariantCulture);
 
     public string RedirectUrl => BuildRedirectUrl("/pagos/resultado");
@@ -295,6 +295,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             Estado = "Inicializando SDK…";
             StateHasChanged();
 
+            var transactionDate = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+
             var redirectUrl = BuildRedirectUrl("/pagos/resultado", new Dictionary<string, string?>
             {
                 ["amount"] = ToInvariantAmount(Amount),
@@ -303,7 +305,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 ["billToLastName"] = BillToLastName,
                 ["billToCountry"] = BillToCountry,
                 ["customerId"] = CustomerId,
-                ["email"] = BillToEmail
+                ["email"] = BillToEmail,
+                ["date"] = transactionDate,
             });
 
             var options = new
@@ -345,7 +348,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             Estado = "Esperando confirmación del banco…";
             StateHasChanged();
 
-            // Timeout aumentado a 120 segundos para la pasarela
             await JS.InvokeVoidAsync("tilopayInterop.prepareAndPayWithTimeout", 120000);
         }
         catch (JSException jse)
@@ -365,7 +367,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         }
     }
 
-    // --- Callbacks desde JS ---
 
     public sealed class PaymentEvent
     {
@@ -373,7 +374,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         public object? payload { get; set; }
     }
 
-    // EN PagoTilopay.razor.cs
 
     [JSInvokable]
     public async Task OnPaymentEvent(PaymentEvent evt)
@@ -384,40 +384,32 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         {
             if (status == "approved")
             {
-                // ... (código existente para "approved")
             }
             else
             {
                 var payloadString = evt?.payload?.ToString() ?? status;
 
-                // 1. Detección de errores específicos de Tilopay (Payload con JSON)
-                //    Buscamos un error de validación de tarjeta dentro del JSON.
                 bool isCardValidationError = payloadString.Contains("número de tarjeta inválido", StringComparison.OrdinalIgnoreCase) ||
                                              payloadString.Contains("tarjeta vencida", StringComparison.OrdinalIgnoreCase) ||
                                              payloadString.Contains("CVV", StringComparison.OrdinalIgnoreCase) ||
-                                             payloadString.Contains("número de tarjeta válido", StringComparison.OrdinalIgnoreCase) || // <--- ESTE ES EL NUEVO CHECK
-                                             payloadString.Contains("Card not allowed", StringComparison.OrdinalIgnoreCase); // <--- Para errores de test
+                                             payloadString.Contains("número de tarjeta válido", StringComparison.OrdinalIgnoreCase) || 
+                                             payloadString.Contains("Card not allowed", StringComparison.OrdinalIgnoreCase); 
 
                 string failReasonMessage;
 
                 if (isCardValidationError)
                 {
-                    // Mensaje amigable para el MODAL (Transacción no efectuada)
                     failReasonMessage = "Por favor verifique los datos de la tarjeta.";
 
-                    // Mensaje simple para la ALERTA DE ESTADO (oculta el JSON técnico)
                     Estado = $"Pago rechazado: Error de datos de tarjeta.";
                 }
                 else
                 {
-                    // Si es cualquier otro error (fondos insuficientes, denegación, etc.)
                     failReasonMessage = "La transacción no pudo ser efectuada. Intente nuevamente.";
 
-                    // Mantiene el estado original, que puede incluir el mensaje del banco/pasarela
                     Estado = $"Pago rechazado o no confirmado ({status}): {payloadString}";
                 }
 
-                // Lógica de retardo forzado (MIN WAIT TIME)
                 if (_paymentStartTime.HasValue)
                 {
                     var elapsed = DateTime.UtcNow - _paymentStartTime.Value;
@@ -429,12 +421,11 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                     }
                 }
 
-                ShowFailure(failReasonMessage); // Mostrar modal con el mensaje amigable o genérico
+                ShowFailure(failReasonMessage); 
             }
         }
         catch (Exception ex)
         {
-            // ... (código existente para manejo de excepción)
         }
 
         StateHasChanged();
