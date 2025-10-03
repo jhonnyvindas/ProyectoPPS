@@ -373,6 +373,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         public object? payload { get; set; }
     }
 
+    // EN PagoTilopay.razor.cs
+
     [JSInvokable]
     public async Task OnPaymentEvent(PaymentEvent evt)
     {
@@ -382,13 +384,38 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         {
             if (status == "approved")
             {
-                // Si se aprueba, la redirección ya está en camino
-                Estado = "Pago aprobado. Redirigiendo...";
+                // ... (código existente para "approved")
             }
             else
             {
-                var msg = evt?.payload?.ToString() ?? status;
-                Estado = $"Pago rechazado o no confirmado ({status}): {msg}";
+                var payloadString = evt?.payload?.ToString() ?? status;
+
+                // 1. Detección de errores específicos de Tilopay (Payload con JSON)
+                //    Buscamos un error de validación de tarjeta dentro del JSON.
+                bool isCardValidationError = payloadString.Contains("número de tarjeta inválido", StringComparison.OrdinalIgnoreCase) ||
+                                             payloadString.Contains("tarjeta vencida", StringComparison.OrdinalIgnoreCase) ||
+                                             payloadString.Contains("CVV", StringComparison.OrdinalIgnoreCase) ||
+                                             payloadString.Contains("número de tarjeta válido", StringComparison.OrdinalIgnoreCase) || // <--- ESTE ES EL NUEVO CHECK
+                                             payloadString.Contains("Card not allowed", StringComparison.OrdinalIgnoreCase); // <--- Para errores de test
+
+                string failReasonMessage;
+
+                if (isCardValidationError)
+                {
+                    // Mensaje amigable para el MODAL (Transacción no efectuada)
+                    failReasonMessage = "Por favor verifique los datos de la tarjeta.";
+
+                    // Mensaje simple para la ALERTA DE ESTADO (oculta el JSON técnico)
+                    Estado = $"Pago rechazado: Error de datos de tarjeta.";
+                }
+                else
+                {
+                    // Si es cualquier otro error (fondos insuficientes, denegación, etc.)
+                    failReasonMessage = "La transacción no pudo ser efectuada. Intente nuevamente.";
+
+                    // Mantiene el estado original, que puede incluir el mensaje del banco/pasarela
+                    Estado = $"Pago rechazado o no confirmado ({status}): {payloadString}";
+                }
 
                 // Lógica de retardo forzado (MIN WAIT TIME)
                 if (_paymentStartTime.HasValue)
@@ -398,18 +425,16 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
                     if (remainingDelay.TotalMilliseconds > 0)
                     {
-                        // Espera el tiempo restante para cumplir el mínimo de 5 segundos de espera
                         await Task.Delay(remainingDelay);
                     }
                 }
 
-                ShowFailure("La transacción no pudo ser efectuada. Intente nuevamente.");
+                ShowFailure(failReasonMessage); // Mostrar modal con el mensaje amigable o genérico
             }
         }
         catch (Exception ex)
         {
-            Estado = $"Error interno del evento: {ex.Message}";
-            ShowFailure("Ocurrió un problema al procesar el evento de pago.");
+            // ... (código existente para manejo de excepción)
         }
 
         StateHasChanged();
@@ -454,23 +479,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return Task.CompletedTask;
     }
 
-    // --- Helpers de Estado ---
-
-    private static string NormalizarEstadoParaBD(string statusRaw)
-    {
-        var s = (statusRaw ?? "").Trim().ToLowerInvariant();
-
-        // 1. Estados Aprobados
-        if (s == "approved" || s == "success" || s == "1")
-            return "aprobado";
-
-        // 2. Estados Especiales 
-        if (s == "pending" || s == "review" || s == "timeout")
-            return "pendiente";
-
-        // 3. El resto son fallos, rechazos, errores
-        return "rechazado";
-    }
 
     private static readonly Dictionary<string, string> _brandLogos = new(StringComparer.OrdinalIgnoreCase)
     {
