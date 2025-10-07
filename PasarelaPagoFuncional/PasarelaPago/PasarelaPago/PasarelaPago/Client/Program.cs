@@ -7,6 +7,8 @@ using Syncfusion.Blazor;
 
 
 var builder = WebAssemblyHostBuilder.CreateDefault(args);
+Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("Mgo+DSMBPh8sVXJ8S0d+X1JPd11dXmJWd1p/THNYflR1fV9DaUwxOX1dQl9mSXxSdERjWXlddX1VT2E=;Mgo+DSMBMAY9C3t2XVhhQlJHfV5AQmBIYVp/TGpJfl96cVxMZVVBJAtUQF1hTH5Rd0diWX9Yc3FcRGRb;MzcxNzE0NEAzMjM4MmUzMDJlMzBTY1k0THgzczZmMVo1SEc0VVRsVWVtakV4UzZhSG1mRDdtTVpWb3lwOFBFPQ==;MzcxNzE0NUAzMjM4MmUzMDJlMzBMMzllNDZ1ckNCakNEQ0hGZUFFcEJ5TGJhZ0t0eEdsWU5qTHVWT3lpbGNnPQ==");
+
 builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
@@ -26,7 +28,6 @@ builder.Services.AddMudServices();
 
 builder.Services.AddSyncfusionBlazor();
 
-Syncfusion.Licensing.SyncfusionLicenseProvider.RegisterLicense("Mgo+DSMBPh8sVXJ8S0d+X1JPd11dXmJWd1p/THNYflR1fV9DaUwxOX1dQl9mSXxSdERjWXlddX1VT2E=;Mgo+DSMBMAY9C3t2XVhhQlJHfV5AQmBIYVp/TGpJfl96cVxMZVVBJAtUQF1hTH5Rd0diWX9Yc3FcRGRb;MzcxNzE0NEAzMjM4MmUzMDJlMzBTY1k0THgzczZmMVo1SEc0VVRsVWVtakV4UzZhSG1mRDdtTVpWb3lwOFBFPQ==;MzcxNzE0NUAzMjM4MmUzMDJlMzBMMzllNDZ1ckNCakNEQ0hGZUFFcEJ5TGJhZ0t0eEdsWU5qTHVWT3lpbGNnPQ==");
 
 
 await builder.Build().RunAsync();
