@@ -68,6 +68,7 @@ public class TransaccionController : ControllerBase
                 .Include(p => p.Cliente)
                 .AsQueryable();
 
+            // 1. Filtro de Fechas (se mantiene, es correcto)
             // Fechas: inicio inclusivo, fin exclusivo (día siguiente) en UTC
             if (filtro.FechaInicio.HasValue)
             {
@@ -80,30 +81,30 @@ public class TransaccionController : ControllerBase
                 query = query.Where(t => t.fechaTransaccion < ff);
             }
 
-            // Filtro por estado desde la UI
+            // 2. Filtro por estado (se hace más robusto)
             if (!string.IsNullOrWhiteSpace(filtro.EstadoTransaccion))
             {
                 var estado = filtro.EstadoTransaccion.Trim().ToLowerInvariant();
 
-                if (estado == "aprobado")
+                // Usamos un switch expression para claridad y robustez
+                query = estado switch
                 {
-                    query = query.Where(t =>
+                    "aprobado" => query.Where(t =>
                         t.estadoTilopay != null &&
                         success.Contains(t.estadoTilopay.ToLower())
-                    );
-                }
-                else if (estado == "rechazado")
-                {
-                    // Todo lo que NO es éxito
-                    query = query.Where(t =>
+                    ),
+                    "rechazado" => query.Where(t =>
+                        // Todo lo que NO es éxito
                         t.estadoTilopay == null ||
                         !success.Contains(t.estadoTilopay.ToLower())
-                    );
-                }
-                // "Todos" => sin filtro
+                    ),
+                    // 🚨 Caso default: Si el estado NO es "aprobado" ni "rechazado",
+                    // se asume que es "Todos" o un valor no reconocido, y NO se aplica filtro.
+                    _ => query
+                };
             }
 
-            // Búsqueda
+            // 3. Búsqueda (se mantiene, es correcto)
             if (!string.IsNullOrWhiteSpace(filtro.Busqueda))
             {
                 var busq = $"%{filtro.Busqueda.ToLower()}%";
@@ -124,7 +125,8 @@ public class TransaccionController : ControllerBase
                 .Select(t => new DTOTransacciones
                 {
                     cedula = t.cedula,
-                    nombreCliente = t.Cliente != null ? $"{t.Cliente.nombre} {t.Cliente.apellido}" : "Desconocido",
+                    // Agregado null-coalescing para evitar excepciones si nombre o apellido son nulos
+                    nombreCliente = t.Cliente != null ? $"{t.Cliente.nombre ?? ""} {t.Cliente.apellido ?? ""}" : "Desconocido",
                     pais = t.Cliente != null ? t.Cliente.pais : "Desconocido",
                     monto = t.monto,
                     moneda = t.moneda,
@@ -146,10 +148,10 @@ public class TransaccionController : ControllerBase
         }
         catch (Exception ex)
         {
+            // En un entorno de desarrollo, es útil loguear la excepción completa
+            Console.WriteLine($"Error en GetTransacciones: {ex}");
             return BadRequest(ex.Message);
         }
     }
-
-
 
 }

@@ -7,9 +7,7 @@ using System.Net.Http.Json;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using PasarelaPago.Shared.Dtos;
-using Syncfusion.Blazor.Grids;
-using Syncfusion.Blazor.Navigations;
-using GridAction = Syncfusion.Blazor.Grids.Action;
+using Microsoft.JSInterop;
 
 namespace PasarelaPago.Client.Pages.DashboardPagos
 {
@@ -17,19 +15,20 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
     {
 
         [Inject] public HttpClient Http { get; set; } = default!;
+        [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
 
 
-        protected SfGrid<DTOTransacciones>? GridTransacciones;
+        public string SearchString { get; set; } = string.Empty;
+        public DTOTransacciones? SelectedTransaccion { get; set; }
+
+
         public List<DTOTransacciones> Transacciones { get; set; } = new();
         public FiltroTransacciones Filtro { get; set; } =
-    new()
-    {
-        FechaInicio = DateTime.Today.AddDays(-1), 
-        FechaFin = DateTime.Today              
-    };
-
-        private DTOTransacciones? _sel;
-
+            new()
+            {
+                FechaInicio = DateTime.Today.AddDays(-1),
+                FechaFin = DateTime.Today
+            };
 
         protected static readonly string[] SearchFields = new[]
         {
@@ -41,6 +40,8 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
             nameof(DTOTransacciones.moneda)
         };
 
+        // --- Mapeo de Países y Monedas (Se mantiene sin cambios) ---
+
         protected static readonly IReadOnlyDictionary<string, string> CountryMap =
             new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
             {
@@ -49,18 +50,18 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
                 ["CO"] = "Colombia"
             };
 
-        protected static string ToCountryName(string? code)   
+        protected static string ToCountryName(string? code)
         {
             if (string.IsNullOrWhiteSpace(code)) return "";
             return CountryMap.TryGetValue(code.Trim(), out var n) ? n : code!;
         }
 
         protected static readonly IReadOnlyDictionary<string, (string Nombre, string Simbolo, CultureInfo Culture)>
-    CurrencyMap = new Dictionary<string, (string, string, CultureInfo)>(StringComparer.OrdinalIgnoreCase)
-    {
-        ["USD"] = ("Dólares", "$", new CultureInfo("en-US")),
-        ["CRC"] = ("Colones", "₡", new CultureInfo("es-CR")),
-    };
+        CurrencyMap = new Dictionary<string, (string, string, CultureInfo)>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["USD"] = ("Dólares", "$", new CultureInfo("en-US")),
+            ["CRC"] = ("Colones", "₡", new CultureInfo("es-CR")),
+        };
 
         protected static string ToCurrencyName(string? code)
         {
@@ -77,105 +78,87 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
         protected static string FormatMoney(decimal amount, string? code)
         {
             if (!string.IsNullOrWhiteSpace(code) && CurrencyMap.TryGetValue(code.Trim(), out var x))
-                return x.Simbolo + amount.ToString("N2", x.Culture); // ₡1.234,56 ó $1,234.56
+                return amount.ToString("N2", x.Culture);
             return amount.ToString("N2", CultureInfo.InvariantCulture);
         }
+
+        // -------------------------------------------------------------------
+        // INICIO DE LA LÓGICA DE CARGA Y EXPORTACIÓN
+        // -------------------------------------------------------------------
+
         protected override async Task OnInitializedAsync() => await CargarDashboard();
 
         public async Task CargarDashboard()
         {
-            var pageSize = GridTransacciones?.PageSettings.PageSize ?? 10;
-            await CargarDatos(1, pageSize);
+            // Para el filtro de búsqueda se llama a CargarDatos con página 1 y un tamaño grande (ej: 1000)
+            await CargarDatos(1, 1000);
         }
 
-        protected async Task OnActionBegin(ActionEventArgs<DTOTransacciones> args)
+        // ** EL NUEVO MÉTODO DE EXPORTACIÓN A EXCEL SIN SYNCFUSION **
+        public async Task ExportarAExcel()
         {
-            if (args.RequestType is GridAction.BeginEdit or GridAction.Add or GridAction.Save)
-                return;
-
-            if (args.RequestType is GridAction.Paging or GridAction.Sorting or GridAction.Filtering or GridAction.Searching)
+            try
             {
-                var currentPage = args.CurrentPage > 0
-                    ? args.CurrentPage
-                    : (GridTransacciones?.PageSettings.CurrentPage ?? 1);
+                var baseUri = Http.BaseAddress ?? new Uri("http://localhost/");
+                var endpoint = new Uri(baseUri, "api/Transaccion/exportar-excel").ToString();
 
-                var pageSize = GridTransacciones?.PageSettings.PageSize ?? 10;
-                await CargarDatos(currentPage, pageSize);
-            }
-        }
+                var query = new Dictionary<string, string?>();
 
-        protected void OnRowSelected(RowSelectEventArgs<DTOTransacciones> args) => _sel = args.Data;
-        protected void OnRowDeselected() => _sel = null;
+                // Fechas: Se envía solo la fecha para que el servidor maneje la conversión a UTC y AddDays.
+                if (Filtro.FechaInicio.HasValue)
+                    query["fechaInicio"] = Filtro.FechaInicio.Value.Date.ToString("yyyy-MM-dd");
 
-        public async Task OnToolbarClick(ClickEventArgs args)
-        {
-            if (args.Item.Id == "GridTransacciones_excelexport")
-            {
-                var props = new ExcelExportProperties
+                if (Filtro.FechaFin.HasValue)
                 {
-                    IncludeTemplateColumn = true,
-                    FileName = "Transacciones.xlsx",
-                    Header = new ExcelHeader
-                    {
-                        HeaderRows = 1,
-                        Rows = new List<ExcelRow>
-                        {
-                            new ExcelRow
-                            {
-                                Index = 1,
-                                Cells = new List<ExcelCell>
-                                {
-                                    new ExcelCell
-                                    {
-                                        RowSpan = 1,
-                                        ColSpan = 8, 
-                                        Value   = "Listado de Transacciones",
-                                        Style   = new ExcelStyle { Bold = true, Italic = true, FontSize = 13 }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                };
+                    query["fechaFin"] = Filtro.FechaFin.Value.Date.ToString("yyyy-MM-dd");
+                }
 
-                await GridTransacciones!.ExportToExcelAsync(props);
+                // 🚨 CORRECCIÓN CLAVE: Usar directamente Filtro.EstadoTransaccion
+                if (!string.IsNullOrWhiteSpace(Filtro.EstadoTransaccion))
+                {
+                    query["estadoTransaccion"] = Filtro.EstadoTransaccion;
+                }
+
+                // Si tienes filtro de búsqueda para el Excel, úsalo aquí
+                if (!string.IsNullOrWhiteSpace(SearchString))
+                {
+                    query["busqueda"] = SearchString;
+                }
+
+                var finalUrl = endpoint + BuildQuery(query);
+
+                Console.WriteLine($"[Exportar] GET {finalUrl}");
+
+                // 1. Llama a la API para obtener el archivo como un stream de bytes.
+                var response = await Http.GetAsync(finalUrl, HttpCompletionOption.ResponseHeadersRead);
+
+                // ... (el manejo de la respuesta se mantiene) ...
+                if (response.IsSuccessStatusCode)
+                {
+                    var fileName = response.Content.Headers.ContentDisposition?.FileNameStar ??
+                                   response.Content.Headers.ContentDisposition?.FileName ??
+                                   "Transacciones.xlsx";
+
+                    var fileBytes = await response.Content.ReadAsByteArrayAsync();
+
+                    // Llamada a JS para descargar el archivo
+                    await JSRuntime.InvokeVoidAsync("BlazorDownloadFile", fileName, fileBytes);
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"Error HTTP al exportar: {response.StatusCode} - {error}");
+                }
             }
-        }
-
-        public void OnExcelQueryCellInfo(ExcelQueryCellInfoEventArgs<DTOTransacciones> args)
-        {
-            switch (args.Column.Field)
+            catch (Exception ex)
             {
-                case nameof(DTOTransacciones.estadoTransaccion):
-                    {
-                        var s = (args.Data.estadoTransaccion ?? "").Trim().ToLowerInvariant();
-                        if (s is "success" or "approved" or "aprobado" or "captured" or "completed" or "paid")
-                            args.Cell.Value = "Aprobado";
-                        else if (s is "failed" or "rechazado" or "declined" or "canceled" or "cancelled" or "error")
-                            args.Cell.Value = "Rechazado";
-                        else
-                            args.Cell.Value = args.Data.estadoTransaccion ?? "";
-                        break;
-                    }
-
-                case nameof(DTOTransacciones.pais):
-                    args.Cell.Value = ToCountryName(args.Data.pais);
-                    break;
-
-                case nameof(DTOTransacciones.moneda):
-                    args.Cell.Value = ToCurrencyName(args.Data.moneda); 
-                    break;
-
-                case nameof(DTOTransacciones.monto):
-                    args.Cell.Value = FormatMoney(args.Data.monto, args.Data.moneda); 
-                    break;
-
-                case nameof(DTOTransacciones.fechaTransaccion):
-                    if (args.Data.fechaTransaccion.HasValue)
-                        args.Cell.Value = args.Data.fechaTransaccion.Value.ToString("dd/MM/yyyy HH:mm");
-                    break;
+                Console.WriteLine("Error al exportar a Excel: " + ex.Message);
             }
         }
+
+        // -------------------------------------------------------------------
+        // LÓGICA DE CARGA DE DATOS (CORREGIDA)
+        // -------------------------------------------------------------------
 
         private async Task CargarDatos(int pagina, int tamanio)
         {
@@ -190,23 +173,26 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
                     ["tamanio"] = tamanio.ToString()
                 };
 
+                // Fechas
                 if (Filtro.FechaInicio.HasValue)
+                    // Envía la fecha/hora completa con formato ISO ('o')
                     query["fechaInicio"] = Filtro.FechaInicio.Value.ToString("o");
 
                 if (Filtro.FechaFin.HasValue)
                 {
-                    var fin = Filtro.FechaFin.Value.Date.AddDays(1).AddTicks(-1);
-                    query["fechaFin"] = fin.ToString("o");
+                    // La API espera el inicio del día, AddDays(1).AddTicks(-1) ya no es necesario aquí.
+                    // Se deja solo el valor del DatePicker para que el servidor lo maneje.
+                    query["fechaFin"] = Filtro.FechaFin.Value.ToString("o");
                 }
 
-                if (!string.IsNullOrWhiteSpace(Filtro.Busqueda))
-                    query["busqueda"] = Filtro.Busqueda;
+                // Búsqueda
+                if (!string.IsNullOrWhiteSpace(SearchString))
+                    query["busqueda"] = SearchString;
 
+                // 🚨 CORRECCIÓN CLAVE: Usar directamente Filtro.EstadoTransaccion
                 if (!string.IsNullOrWhiteSpace(Filtro.EstadoTransaccion))
                 {
-                    var estadoApi = MapEstadoToApi(Filtro.EstadoTransaccion); 
-                    if (!string.IsNullOrEmpty(estadoApi))
-                        query["estadoTransaccion"] = estadoApi;
+                    query["estadoTransaccion"] = Filtro.EstadoTransaccion;
                 }
 
                 var finalUrl = endpoint + BuildQuery(query);
@@ -215,19 +201,7 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
                 var result = await Http.GetFromJsonAsync<PaginacionResponse<DTOTransacciones>>(finalUrl);
                 var data = result?.Resultados ?? new List<DTOTransacciones>();
 
-                if (!string.IsNullOrWhiteSpace(Filtro.EstadoTransaccion))
-                {
-                    var objetivo = NormalizeStatus(Filtro.EstadoTransaccion);
-                    data = data.FindAll(t => NormalizeStatus(t.estadoTransaccion) == objetivo);
-                }
-
                 Transacciones = data;
-
-                if (GridTransacciones is not null)
-                {
-                    GridTransacciones.TotalItemCount = result?.TotalRegistros ?? data.Count;
-                    await GridTransacciones.Refresh();
-                }
 
                 StateHasChanged();
             }
@@ -237,15 +211,9 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
             }
         }
 
-        private static string? MapEstadoToApi(string? ui)
-        {
-            if (string.IsNullOrWhiteSpace(ui)) return null;
-            var s = ui.Trim().ToLowerInvariant();
-            if (s == "aprobado") return "success";
-            if (s == "rechazado") return "failed";
-            return s;
-        }
+        // --- Métodos Auxiliares (MapEstadoToApi fue ELIMINADO ya que era la causa del error) ---
 
+        // NormalizeStatus se mantiene, ya que se usa para colorear en el Razor.
         private static string NormalizeStatus(string? v)
         {
             var s = (v ?? "").Trim().ToLowerInvariant();
@@ -264,6 +232,23 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
                 .ToArray();
 
             return parts.Length > 0 ? "?" + string.Join("&", parts) : string.Empty;
+        }
+
+        // [NUEVO] Método QuickFilter para MudBlazor (filtro en el cliente)
+        public bool QuickFilter(DTOTransacciones element)
+        {
+            if (string.IsNullOrWhiteSpace(SearchString))
+                return true;
+
+            // Revisa si alguno de los campos de búsqueda contiene la cadena.
+            var searchLower = SearchString.ToLowerInvariant();
+
+            return (element.cedula?.Contains(searchLower, StringComparison.OrdinalIgnoreCase) == true) ||
+                   (element.nombreCliente?.Contains(searchLower, StringComparison.OrdinalIgnoreCase) == true) ||
+                   (element.pais?.Contains(searchLower, StringComparison.OrdinalIgnoreCase) == true) ||
+                   (element.numeroOrden?.Contains(searchLower, StringComparison.OrdinalIgnoreCase) == true) ||
+                   (element.estadoTransaccion?.Contains(searchLower, StringComparison.OrdinalIgnoreCase) == true) ||
+                   (element.moneda?.Contains(searchLower, StringComparison.OrdinalIgnoreCase) == true);
         }
     }
 }

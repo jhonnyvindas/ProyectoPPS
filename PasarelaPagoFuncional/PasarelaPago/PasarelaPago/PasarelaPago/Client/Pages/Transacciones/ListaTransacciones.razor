@@ -1,9 +1,11 @@
 ﻿@page "/Transacciones"
 @inherits PasarelaPago.Client.Pages.DashboardPagos.DashboardPagos
 @using PasarelaPago.Shared.Dtos
-@using Syncfusion.Blazor.Grids
+@using MudBlazor.Extensions
+@using System.Globalization
 
 <Header>Transacciones</Header>
+
 <MudCard>
     <MudCardContent>
         <MudGrid Class="ma-4">
@@ -31,77 +33,93 @@
 
 <MudGrid>
     <MudItem xs="12" sm="12" md="12" lg="12" xl="12" xxl="12">
-        <SfGrid  @ref="GridTransacciones" ID="GridTransacciones" TValue="DTOTransacciones"
-                DataSource="@Transacciones" AllowExcelExport="true"
-                AllowPaging="true" AllowSorting="true" AllowFiltering="true" AllowResizing="true"
-                class="CustomGridHeader CustomGridContent" ShowColumnChooser="true"
-                Toolbar="@( new List<string>() { "ExcelExport","ColumnChooser",  "Search"})"
-                    >
-          
-            <GridFilterSettings Type="Syncfusion.Blazor.Grids.FilterType.Excel"></GridFilterSettings>
-            <GridSelectionSettings Type="Syncfusion.Blazor.Grids.SelectionType.Single" Mode="Syncfusion.Blazor.Grids.SelectionMode.Row" PersistSelection="true"></GridSelectionSettings>
-            <GridPageSettings PageSize="10"></GridPageSettings>
-            <GridEvents TValue="DTOTransacciones"
-                        RowSelected="OnRowSelected"
-                        RowDeselected="OnRowDeselected"
-                        OnToolbarClick="OnToolbarClick"
-                        ExcelQueryCellInfoEvent="OnExcelQueryCellInfo" />
+        
+        <MudTable T="DTOTransacciones" 
+                  Items="@Transacciones" 
+                  Dense="true" 
+                  Hover="true" 
+                  Bordered="false" 
+                  Striped="false" 
+                  Elevation="2"
+                  @bind-SelectedItem="SelectedTransaccion" 
+                  SortLabel="Ordenar por"
+                  Filter="new Func<DTOTransacciones,bool>(QuickFilter)"
+                  >
+            
+            <ToolBarContent>
+                <MudButton Variant="Variant.Text" OnClick="ExportarAExcel" 
+                           Style="color: #6c757d; font-weight: 500; text-transform: none;">
+                    <span class="d-flex align-items-center">
+                        <i class="fas fa-file-excel mr-2" style="font-size: 1.1em;"></i> 
+                        Excel Export
+                    </span>
+                </MudButton>
+                
+                <MudSpacer />
+                
+                <MudTextField @bind-Value="SearchString" Placeholder="Buscar..." Adornment="Adornment.End" 
+                              AdornmentIcon="@Icons.Material.Filled.Search" IconSize="Size.Medium" Class="mt-0" 
+                              Style="max-width: 250px;" />
+            </ToolBarContent>
 
-            <GridColumns>
-                <GridColumn Field=@nameof(DTOTransacciones.cedula) HeaderText="Cédula" Type="ColumnType.String" Width="100" />
-                <GridColumn Field=@nameof(DTOTransacciones.nombreCliente) HeaderText="Nombre" Type="ColumnType.String" Width="150" />
-                <GridColumn Field=@nameof(DTOTransacciones.pais)
-                            HeaderText="País" Type="ColumnType.String" Width="120">
-                    <Template>
-                        @ToCountryName(((DTOTransacciones)context).pais)
-                    </Template>
-                </GridColumn>
-                <GridColumn Field=@nameof(DTOTransacciones.moneda)
-                            HeaderText="Moneda" Type="ColumnType.String" Width="110">
-                    <Template Context="row">
-                        @ToCurrencyName(((DTOTransacciones)row).moneda)
-                    </Template>
-                </GridColumn>
-                <GridColumn Field=@nameof(DTOTransacciones.monto) HeaderText="Monto" Type="ColumnType.Number" Width="100" Format="N2" />
-                <GridColumn Field=@nameof(DTOTransacciones.numeroOrden) HeaderText="# Orden" Type="ColumnType.String" Width="120" />
-                <GridColumn Field=@nameof(DTOTransacciones.fechaTransaccion) HeaderText="Fecha" Type="ColumnType.DateTime" Format="dd/MM/yyyy" Width="150" />
-                <GridColumn Field=@nameof(DTOTransacciones.estadoTransaccion)
-                            HeaderText="Estado" Type="ColumnType.String" Width="120">
-                    <Template>
-                        @{
-                            var r = (context as DTOTransacciones)!;
-                            var s = (r.estadoTransaccion ?? "").Trim().ToLowerInvariant();
+            <HeaderContent>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.cedula!)">Cédula</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.nombreCliente!)">Nombre</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.pais!)">País</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.moneda!)">Moneda</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.monto)">Monto</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.numeroOrden!)"># Orden</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.fechaTransaccion!)">Fecha</MudTableSortLabel></MudTh>
+                <MudTh><MudTableSortLabel T="DTOTransacciones" SortBy="new Func<DTOTransacciones, object>(x=>x.estadoTransaccion!)">Estado</MudTableSortLabel></MudTh>
+            </HeaderContent>
 
-                            bool aprobado =
-                            s == "success" || s == "approved" || s == "aprobado" ||
-                            s == "captured" || s == "completed" || s == "paid";
+            <RowTemplate>
+                <MudTd DataLabel="Cédula">@context.cedula</MudTd>
+                <MudTd DataLabel="Nombre">@context.nombreCliente</MudTd>
+                <MudTd DataLabel="País">@ToCountryName(context.pais)</MudTd>
+                <MudTd DataLabel="Moneda">@ToCurrencyName(context.moneda)</MudTd>
+                <MudTd DataLabel="Monto" Class="text-right">
+                    @CurrencySymbol(context.moneda) @FormatMoney(context.monto, context.moneda)
+                </MudTd>
+                <MudTd DataLabel="# Orden">@context.numeroOrden</MudTd>
+                <MudTd DataLabel="Fecha">
+                    @if (context.fechaTransaccion.HasValue)
+                    {
+                        @context.fechaTransaccion.Value.ToString("dd/MM/yyyy")
+                    }
+                </MudTd>
+                <MudTd DataLabel="Estado">
+                    @{
+                        // 🚨 Nota: La variable 's' ahora usa la propiedad estadoTransaccion normalizada por la API
+                        var s = (context.estadoTransaccion ?? "").Trim().ToLowerInvariant();
+                        bool aprobado = s == "aprobado";
+                        bool rechazado = s == "rechazado";
+                    }
+                    @if (aprobado)
+                    {
+                        <MudText Color="Color.Success" Style="font-size:12px;font-weight:bold;">Aprobado</MudText>
+                    }
+                    else if (rechazado)
+                    {
+                        <MudText Color="Color.Error" Style="font-size:12px;font-weight:bold;">Rechazado</MudText>
+                    }
+                    else
+                    {
+                        <MudText Color="Color.Info" Style="font-size:12px;font-weight:bold;">
+                            @context.estadoTransaccion
+                        </MudText>
+                    }
+                </MudTd>
+            </RowTemplate>
 
-                            bool rechazado =
-                            s == "failed" || s == "rechazado" || s == "declined" ||
-                            s == "canceled" || s == "cancelled" || s == "error" ||
-                            s == "timeout" || s == "expired" || s == "voided" ||
-                            s == "denied" || s == "refused" || s == "not_approved" ||
-                            s == "unknown";
-                        }
-                        @if (aprobado)
-                        {
-                            <MudText Color="Color.Success" Style="font-size:12px;font-weight:bold;">Aprobado</MudText>
-                        }
-                        else if (rechazado)
-                        {
-                            <MudText Color="Color.Error" Style="font-size:12px;font-weight:bold;">Rechazado</MudText>
-                        }
-                        else
-                        {
-                            <MudText Color="Color.Info" Style="font-size:12px;font-weight:bold;">
-                                @((context as DTOTransacciones)!.estadoTransaccion)
-                            </MudText>
-                        }
-                    </Template>
-                </GridColumn>
-            </GridColumns>
-        </SfGrid>
+            <NoRecordsContent>
+                <MudText>No se encontraron transacciones que coincidan.</MudText>
+            </NoRecordsContent>
+
+            <PagerContent>
+                <MudTablePager PageSizeOptions="new int[]{10, 25, 50, 100}" />
+            </PagerContent>
+            
+        </MudTable>
     </MudItem>
 </MudGrid>
-
-
