@@ -1,5 +1,4 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using PasarelaPago.Server.Data;
 using PasarelaPago.Shared.Dtos;
 using PasarelaPago.Shared.Models;
 using System.Transactions;
@@ -8,9 +7,9 @@ namespace PasarelaPago.Server.Services;
 
 public class TransaccionService
 {
-    private readonly TilopayDbContext _context; // OK: Usas TilopayDbContext
+    private readonly TilopayDBContext _context; // OK: Usas TilopayDbContext
 
-    public TransaccionService(TilopayDbContext context)
+    public TransaccionService(TilopayDBContext context)
     {
         _context = context;
     }
@@ -20,7 +19,7 @@ public class TransaccionService
     public async Task GuardarTransaccionAsync(Cliente cliente, Pago pago)
     {
         // Validación de datos mínimos
-        if (string.IsNullOrWhiteSpace(cliente.cedula) || string.IsNullOrWhiteSpace(pago.numeroOrden))
+        if (string.IsNullOrWhiteSpace(cliente.Cedula) || string.IsNullOrWhiteSpace(pago.NumeroOrden))
         {
             throw new ArgumentException("Cédula y Número de Orden son requeridos para la persistencia.");
         }
@@ -32,7 +31,7 @@ public class TransaccionService
             {
                 // --- 1. MANEJAR EL CLIENTE (UPSERT POR CÉDULA) ---
                 var clienteExistente = await _context.Clientes
-                    .FirstOrDefaultAsync(c => c.cedula == cliente.cedula);
+                    .FirstOrDefaultAsync(c => c.Cedula == cliente.Cedula);
 
                 if (clienteExistente == null)
                 {
@@ -44,22 +43,22 @@ public class TransaccionService
                     // CASO B: CLIENTE EXISTENTE (UPDATE)
 
                     // Actualizar datos del cliente
-                    clienteExistente.nombre = cliente.nombre ?? clienteExistente.nombre;
-                    clienteExistente.apellido = cliente.apellido ?? clienteExistente.apellido;
-                    clienteExistente.correo = cliente.correo ?? clienteExistente.correo;
-                    clienteExistente.pais = cliente.pais ?? clienteExistente.pais;
-                    clienteExistente.cedula = cliente.cedula;
+                    clienteExistente.Nombre = cliente.Nombre ?? clienteExistente.Nombre;
+                    clienteExistente.Apellido = cliente.Apellido ?? clienteExistente.Apellido;
+                    clienteExistente.Correo = cliente.Correo ?? clienteExistente.Correo;
+                    clienteExistente.Pais = cliente.Pais ?? clienteExistente.Pais;
+                    clienteExistente.Cedula = cliente.Cedula;
 
                     // CRUCIAL: Se usa ClienteId en lugar de Id
                     // Esta línea estaba causando el CS1061
-                    pago.cedula = clienteExistente.cedula; // <-- CORRECCIÓN AQUÍ
+                    pago.Cedula = clienteExistente.Cedula; // <-- CORRECCIÓN AQUÍ
                 }
 
                 // --- 2. MANEJAR EL PAGO (UPSERT POR NUMERO DE ORDEN) ---
                 var transaccionExistente = await _context.Pagos
-                    .FirstOrDefaultAsync(p => p.numeroOrden == pago.numeroOrden);
+                    .FirstOrDefaultAsync(p => p.NumeroOrden == pago.NumeroOrden);
 
-                var nuevoEstado = (pago.estadoTilopay ?? "").Trim().ToLowerInvariant();
+                var nuevoEstado = (pago.EstadoTilopay ?? "").Trim().ToLowerInvariant();
                 var estadoAprobado = "aprobado";
 
                 if (transaccionExistente == null)
@@ -70,7 +69,7 @@ public class TransaccionService
                 else
                 {
                     // CASO Y: PAGO EXISTENTE (PREVENIR DUPLICIDAD)
-                    var estadoActual = (transaccionExistente.estadoTilopay ?? "").Trim().ToLowerInvariant();
+                    var estadoActual = (transaccionExistente.EstadoTilopay ?? "").Trim().ToLowerInvariant();
 
                     // Regla de Oro: Si ya está aprobado, ignoramos cualquier notificación posterior.
                     if (estadoActual == estadoAprobado)
@@ -83,10 +82,10 @@ public class TransaccionService
                     // Si el nuevo estado es 'aprobado', actualizamos la transacción existente
                     if (nuevoEstado == estadoAprobado)
                     {
-                        transaccionExistente.estadoTilopay = pago.estadoTilopay;
-                        transaccionExistente.datosRespuestaTilopay = pago.datosRespuestaTilopay;
-                        transaccionExistente.monto = pago.monto;
-                        transaccionExistente.fechaTransaccion = pago.fechaTransaccion;
+                        transaccionExistente.EstadoTilopay = pago.EstadoTilopay;
+                        transaccionExistente.DatosRespuestaTilopay = pago.DatosRespuestaTilopay;
+                        transaccionExistente.Monto = pago.Monto;
+                        transaccionExistente.FechaTransaccion = pago.FechaTransaccion;
                     }
                     // Si el nuevo estado es rechazado/pendiente y ya existe, no actualizamos
                     else

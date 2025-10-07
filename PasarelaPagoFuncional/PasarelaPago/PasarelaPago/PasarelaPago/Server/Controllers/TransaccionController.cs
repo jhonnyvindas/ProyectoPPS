@@ -17,7 +17,15 @@ public class TransaccionController : ControllerBase
 {
     private readonly TransaccionService _svc;
 
-    public TransaccionController(TransaccionService svc) => _svc = svc;
+    public TransaccionController(TransaccionService svc, TilopayDBContext context)
+    {
+        _svc = svc;
+        _context = context;
+    }
+
+
+    private readonly TilopayDBContext _context;
+
 
     public class PagoConCliente
 
@@ -33,9 +41,9 @@ public class TransaccionController : ControllerBase
     {
         if (body is null) return BadRequest("Cuerpo vacío.");
 
-        var ced = body.Cliente?.cedula ?? body.Pago?.cedula;
+        var ced = body.Cliente?.Cedula ?? body.Pago?.Cedula;
         // Agregamos chequeo para el numeroOrden, que es el ID único.
-        var order = body.Pago?.numeroOrden;
+        var order = body.Pago?.NumeroOrden;
 
         if (string.IsNullOrWhiteSpace(ced))
             return BadRequest("La cédula es requerida.");
@@ -43,9 +51,9 @@ public class TransaccionController : ControllerBase
         if (string.IsNullOrWhiteSpace(order)) // <-- Validación crucial
             return BadRequest("El número de orden (numeroOrden) es requerido.");
 
-        body.Cliente ??= new Cliente { cedula = ced };
-        body.Cliente.cedula = ced;
-        body.Pago.cedula = ced;
+        body.Cliente ??= new Cliente { Cedula = ced };
+        body.Cliente.Cedula = ced;
+        body.Pago.Cedula = ced;
 
         // La lógica de UPSERT debe estar dentro de este servicio.
         await _svc.GuardarTransaccionAsync(body.Cliente, body.Pago);
@@ -63,22 +71,32 @@ public class TransaccionController : ControllerBase
             // Lista canónica de estados "exitosos"
             var success = new[] { "approved", "success", "captured", "completed", "paid", "aprobado" };
 
-            var query = _svc.Transacciones
-                .AsNoTracking()
-                .Include(p => p.Cliente)
-                .AsQueryable();
+            //var query = _svc.Transacciones
+               // .AsNoTracking()
+                
+                // .Include(p => p.Cliente)
+                //.AsQueryable();
+            var query =
+                from pago in _svc.Transacciones.AsNoTracking()
+                join cliente in _context.Clientes on pago.Cedula equals cliente.Cedula
+                select new
+                {
+                    Pago = pago,
+                    Cliente = cliente
+                };
+
 
             // 1. Filtro de Fechas (se mantiene, es correcto)
             // Fechas: inicio inclusivo, fin exclusivo (día siguiente) en UTC
             if (filtro.FechaInicio.HasValue)
             {
                 var fi = DateTime.SpecifyKind(filtro.FechaInicio.Value.Date, DateTimeKind.Utc);
-                query = query.Where(t => t.fechaTransaccion >= fi);
+                query = query.Where(t => t.Pago.FechaTransaccion >= fi);
             }
             if (filtro.FechaFin.HasValue)
             {
                 var ff = DateTime.SpecifyKind(filtro.FechaFin.Value.Date.AddDays(1), DateTimeKind.Utc);
-                query = query.Where(t => t.fechaTransaccion < ff);
+                query = query.Where(t => t.Pago.FechaTransaccion < ff);
             }
 
             // 2. Filtro por estado (se hace más robusto)
@@ -90,13 +108,13 @@ public class TransaccionController : ControllerBase
                 query = estado switch
                 {
                     "aprobado" => query.Where(t =>
-                        t.estadoTilopay != null &&
-                        success.Contains(t.estadoTilopay.ToLower())
+                        t.Pago.EstadoTilopay != null &&
+                        success.Contains(t.Pago.EstadoTilopay.ToLower())
                     ),
                     "rechazado" => query.Where(t =>
                         // Todo lo que NO es éxito
-                        t.estadoTilopay == null ||
-                        !success.Contains(t.estadoTilopay.ToLower())
+                        t.Pago.EstadoTilopay == null ||
+                        !success.Contains(t.Pago.EstadoTilopay.ToLower())
                     ),
                     // 🚨 Caso default: Si el estado NO es "aprobado" ni "rechazado",
                     // se asume que es "Todos" o un valor no reconocido, y NO se aplica filtro.
@@ -109,32 +127,32 @@ public class TransaccionController : ControllerBase
             {
                 var busq = $"%{filtro.Busqueda.ToLower()}%";
                 query = query.Where(t =>
-                    EF.Functions.Like((t.Cliente!.nombre ?? "").ToLower(), busq) ||
-                    EF.Functions.Like((t.Cliente!.apellido ?? "").ToLower(), busq) ||
-                    EF.Functions.Like((t.cedula ?? "").ToLower(), busq) ||
-                    EF.Functions.Like((t.numeroOrden ?? "").ToLower(), busq)
+                    EF.Functions.Like((t.Cliente!.Nombre ?? "").ToLower(), busq) ||
+                    EF.Functions.Like((t.Cliente!.Apellido ?? "").ToLower(), busq) ||
+                    EF.Functions.Like((t.Pago.Cedula ?? "").ToLower(), busq) ||
+                    EF.Functions.Like((t.Pago.NumeroOrden ?? "").ToLower(), busq)
                 );
             }
 
             var total = await query.CountAsync();
 
             var data = await query
-                .OrderByDescending(t => t.fechaTransaccion)
+                .OrderByDescending(t => t.Pago.FechaTransaccion)
                 .Skip((filtro.Pagina - 1) * filtro.Tamanio)
                 .Take(filtro.Tamanio)
                 .Select(t => new DTOTransacciones
                 {
-                    cedula = t.cedula,
+                    cedula = t.Pago.Cedula,
                     // Agregado null-coalescing para evitar excepciones si nombre o apellido son nulos
-                    nombreCliente = t.Cliente != null ? $"{t.Cliente.nombre ?? ""} {t.Cliente.apellido ?? ""}" : "Desconocido",
-                    pais = t.Cliente != null ? t.Cliente.pais : "Desconocido",
-                    monto = t.monto,
-                    moneda = t.moneda,
-                    numeroOrden = t.numeroOrden,
-                    fechaTransaccion = t.fechaTransaccion,
+                    nombreCliente = t.Cliente != null ? $"{t.Cliente.Nombre ?? ""} {t.Cliente.Apellido ?? ""}" : "Desconocido",
+                    pais = t.Cliente != null ? t.Cliente.Pais : "Desconocido",
+                    monto = t.Pago.Monto,
+                    moneda = t.Pago.Moneda,
+                    numeroOrden = t.Pago.NumeroOrden,
+                    fechaTransaccion = t.Pago.FechaTransaccion,
 
                     // Normaliza para UI/filtros: solo "aprobado" o "rechazado"
-                    estadoTransaccion = t.estadoTilopay != null && success.Contains(t.estadoTilopay.ToLower())
+                    estadoTransaccion = t.Pago.EstadoTilopay != null && success.Contains(t.Pago.EstadoTilopay.ToLower())
                         ? "aprobado"
                         : "rechazado"
                 })

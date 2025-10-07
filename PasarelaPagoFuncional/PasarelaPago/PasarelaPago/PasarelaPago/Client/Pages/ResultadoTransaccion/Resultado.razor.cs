@@ -161,30 +161,30 @@ public partial class Resultado : ComponentBase
             // 2. Crear los modelos Cliente y Pago para enviar al API
             var cliente = new Cliente
             {
-                cedula = (Result.IdNumber ?? "").Trim(),
-                nombre = Result.FirstName ?? "",
-                apellido = Result.LastName ?? "",
-                correo = Result.Email,
-                pais = Result.Country // Añadido para completar el modelo Cliente
+                Cedula = (Result.IdNumber ?? "").Trim(),
+                Nombre = Result.FirstName ?? "",
+                Apellido = Result.LastName ?? "",
+                Correo = Result.Email,
+                Pais = Result.Country // Añadido para completar el modelo Cliente
             };
 
             var pago = new Pago
             {
-                numeroOrden = Result.Order!, // Sabemos que Order no es null por la validación
-                cedula = (Result.IdNumber ?? "").Trim(),
-                metodoPago = "payfac",
+                NumeroOrden = Result.Order!, // Sabemos que Order no es null por la validación
+                Cedula = (Result.IdNumber ?? "").Trim(),
+                MetodoPago = "payfac",
                 // El monto y moneda siempre son requeridos
-                monto = decimal.TryParse(Result.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var m) ? m : 0m,
-                moneda = (Result.Currency ?? "USD").ToUpperInvariant(),
-                estadoTilopay = estadoBD,
-                numeroAutorizacion = Result.Auth,
+                Monto = decimal.TryParse(Result.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var m) ? m : 0m,
+                Moneda = (Result.Currency ?? "USD").ToUpperInvariant(),
+                EstadoTilopay = estadoBD,
+                NumeroAutorizacion = Result.Auth,
                 // Guardamos los datos recibidos de la URL como un JSON simple
-                datosRespuestaTilopay = $"{{ \"code\": \"{Result.Code}\", \"description\": \"{Result.Description}\", \"auth\": \"{Result.Auth}\", \"tx_id\": \"{Result.TilopayTx}\", \"order\": \"{Result.Order}\" }}",
+                DatosRespuestaTilopay = $"{{ \"code\": \"{Result.Code}\", \"description\": \"{Result.Description}\", \"auth\": \"{Result.Auth}\", \"tx_id\": \"{Result.TilopayTx}\", \"order\": \"{Result.Order}\" }}",
 
                 // USAMOS LA FECHA PARSEADA DE LA URL. Si es DateTime.MinValue (fecha no recibida), usamos UtcNow.
-                fechaTransaccion = TransactionDateTime != DateTime.MinValue ? TransactionDateTime : DateTime.UtcNow,
+                FechaTransaccion = TransactionDateTime != DateTime.MinValue ? TransactionDateTime : DateTime.UtcNow,
 
-                marcaTarjeta = (Result.Brand ?? "").ToLowerInvariant(),
+                MarcaTarjeta = (Result.Brand ?? "").ToLowerInvariant(),
             };
 
             var payload = new PagoConCliente { Cliente = cliente, Pago = pago };

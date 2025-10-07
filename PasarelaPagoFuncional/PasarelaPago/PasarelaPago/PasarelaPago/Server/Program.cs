@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.ResponseCompression;
 using Microsoft.EntityFrameworkCore;
-using PasarelaPago.Server.Data;
 using PasarelaPago.Server.Services;
+using PasarelaPago.Shared.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -29,7 +29,7 @@ builder.Services.AddCors(opt =>
     );
 });
 
-builder.Services.AddDbContext<TilopayDbContext>(options =>
+builder.Services.AddDbContext<TilopayDBContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 
@@ -39,7 +39,7 @@ var app = builder.Build();
 // ---- Diagnóstico de BD al inicio ----
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<TilopayDbContext>();
+    var db = scope.ServiceProvider.GetRequiredService<TilopayDBContext>();
     var cnn = db.Database.GetDbConnection();
     Console.WriteLine($"[DB] Provider   : {db.Database.ProviderName}");
     Console.WriteLine($"[DB] DataSource : {cnn.DataSource}");
