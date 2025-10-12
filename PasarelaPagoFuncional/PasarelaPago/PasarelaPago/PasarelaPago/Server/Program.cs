@@ -18,6 +18,9 @@ builder.Services.AddControllers();
 builder.Services.AddHttpClient();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+builder.Services.AddMemoryCache();
+builder.Services.AddSingleton<ResultadoTokenService>();
+
 
 const string CordsDev = "CordsDev";
 builder.Services.AddCors(opt =>
@@ -31,6 +34,8 @@ builder.Services.AddCors(opt =>
 
 builder.Services.AddDbContext<TilopayDBContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+
 
 
 builder.Services.AddScoped<TransaccionService>();

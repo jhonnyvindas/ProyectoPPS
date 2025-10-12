@@ -247,10 +247,15 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         await Reload();
     }
 
+    private sealed class PrepararOrdenResponse
+    {
+        public string Token { get; set; } = default!;
+        public DateTime ExpiraUtc { get; set; }
+    }
     public async Task Pagar()
     {
         if (Pagando) return;
-        _paymentStartTime = DateTime.UtcNow; // Guardamos el tiempo de inicio
+        _paymentStartTime = DateTime.UtcNow;
         Pagando = true;
         ShowFailModal = false;
 
@@ -265,13 +270,15 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             Estado = "Obteniendo token…";
             StateHasChanged();
 
-            var token = await Api.GetSdkTokenAsync();
-            if (string.IsNullOrWhiteSpace(token))
+            // 1) Token del SDK de Tilopay
+            var sdkToken = await Api.GetSdkTokenAsync();
+            if (string.IsNullOrWhiteSpace(sdkToken))
             {
                 Estado = "No se obtuvo token del servidor.";
                 return;
             }
 
+            // 2) Asegurar método de pago Payfac
             if (string.IsNullOrWhiteSpace(SelectedPaymentMethod) || !IsPayfac)
             {
                 try
@@ -289,26 +296,41 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 return;
             }
 
+            // 3) Generar nuevo número de orden
             _orderNumber = Guid.NewGuid().ToString("N");
             StateHasChanged();
+
+            // 4) PREPARAR ORDEN en tu API (UPSERT de Cliente y Pago)  ✅
+            var preparar = new
+            {
+                NumeroOrden = _orderNumber,
+                Cedula = CustomerId!,
+                Monto = Amount,
+                Moneda = Currency,
+
+                // 👉 Estos campos permiten que luego aparezcan en Resultado (nombre/correo/país)
+                Nombre = BillToFirstName,
+                Apellido = BillToLastName,
+                Email = BillToEmail,
+                Pais = BillToCountry
+            };
+
+            var prepResp = await Http.PostAsJsonAsync("api/Transaccion/preparar-orden", preparar);
+            prepResp.EnsureSuccessStatusCode();
+            var prep = await prepResp.Content.ReadFromJsonAsync<PrepararOrdenResponse>();
+            if (prep is null || string.IsNullOrWhiteSpace(prep.Token))
+            {
+                Estado = "No fue posible preparar la orden.";
+                return;
+            }
 
             Estado = "Inicializando SDK…";
             StateHasChanged();
 
-            var transactionDate = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
+            // 5) Redirección SOLO con el token (sin query propios) ✅
+            var redirectUrl = BuildRedirectUrl($"/pagos/resultado/{prep.Token}");
 
-            var redirectUrl = BuildRedirectUrl("/pagos/resultado", new Dictionary<string, string?>
-            {
-                ["amount"] = ToInvariantAmount(Amount),
-                ["currency"] = Currency,
-                ["billToFirstName"] = BillToFirstName,
-                ["billToLastName"] = BillToLastName,
-                ["billToCountry"] = BillToCountry,
-                ["customerId"] = CustomerId,
-                ["email"] = BillToEmail,
-                ["date"] = transactionDate,
-            });
-
+            // 6) Opciones del SDK (datos sensibles NO van en la URL) ✅
             var options = new
             {
                 orderNumber = _orderNumber,
@@ -332,7 +354,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 paymentMethod = SelectedPaymentMethod
             };
 
-            await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, options, _selfRef);
+            await JS.InvokeVoidAsync("tilopayInterop.ensureInit", sdkToken, options, _selfRef);
 
             try
             {
@@ -366,6 +388,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             StateHasChanged();
         }
     }
+
+
 
 
     public sealed class PaymentEvent

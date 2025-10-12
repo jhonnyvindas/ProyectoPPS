@@ -2,6 +2,7 @@
 #nullable disable
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace PasarelaPago.Shared.Models;
 
@@ -25,11 +26,12 @@ public partial class Pago
 
     public string MarcaTarjeta { get; set; }
 
-    public string DatosRespuestaTilopay { get; set; }
+    public string? DatosRespuestaTilopay { get; set; }
 
     public DateTime FechaTransaccion { get; set; }
 
-    public string StateNonce { get; set; }
+    [Column("stateNonce")]
+    public string StateNonce { get; set; } = Guid.NewGuid().ToString("N");
 
     public virtual Cliente CedulaNavigation { get; set; } 
 }

@@ -1,113 +1,108 @@
-﻿@page "/pagos/resultado"
-@namespace PasarelaPago.Client.Pages.ResultadoTransaccion
+﻿@page "/pagos/resultado/{token}"
 @using MudBlazor
 
 <MudContainer MaxWidth="MaxWidth.Medium" Class="mx-auto mt-6">
-
     @if (Loading)
     {
         <MudSkeleton Height="60px" Class="mb-4" />
         <MudSkeleton Height="220px" />
     }
-    else
+    else if (!string.IsNullOrWhiteSpace(Error))
+    {
+        <div class="banner banner-error">
+            <MudIcon Icon="@Icons.Material.Filled.Error" Size="Size.Large" Class="mr-2" />
+            <MudText Typo="Typo.h5" Class="m-0">@Error</MudText>
+        </div>
+    }
+    else if (Data is not null)
     {
         <div class="banner @BannerCss">
             <MudIcon Icon="@BannerIcon" Size="Size.Large" Class="mr-2" />
             <MudText Typo="Typo.h5" Class="m-0">@BannerText</MudText>
         </div>
 
+        @* --- Bloque de datos del cliente --- *@
         <MudCard Class="mt-3 shadow-sm">
             <MudCardContent Class="p-4">
                 <MudGrid Spacing="2">
-                    @if (!string.IsNullOrWhiteSpace(Result.DisplayCustomer))
+                    @if (!string.IsNullOrWhiteSpace(Data.DisplayCustomer))
                     {
                         <MudItem xs="12" sm="6">
                             <MudText Typo="Typo.subtitle1" Class="font-bold">Cliente</MudText>
-                            <MudText>@Result.DisplayCustomer</MudText>
+                            <MudText>@Data.DisplayCustomer</MudText>
                         </MudItem>
                     }
-
-                    @if (!string.IsNullOrWhiteSpace(Result.Country))
+                    @if (!string.IsNullOrWhiteSpace(Data.Pais))
                     {
                         <MudItem xs="12" sm="6">
                             <MudText Typo="Typo.subtitle1" Class="font-bold">País</MudText>
-                            <MudText>@GetCountryName(Result.Country)</MudText>
+                            <MudText>@GetCountryName(Data.Pais)</MudText>
+
                         </MudItem>
                     }
-
-                    @if (!string.IsNullOrWhiteSpace(Result.IdNumber))
+                    @if (!string.IsNullOrWhiteSpace(Data.Cedula))
                     {
                         <MudItem xs="12" sm="6">
                             <MudText Typo="Typo.subtitle1" Class="font-bold">Cédula</MudText>
-                            <MudText>@Result.IdNumber</MudText>
+                            <MudText>@Data.Cedula</MudText>
                         </MudItem>
                     }
-
-                    @if (!string.IsNullOrWhiteSpace(Result.Email))
+                    @if (!string.IsNullOrWhiteSpace(Data.Email))
                     {
                         <MudItem xs="12" sm="6">
                             <MudText Typo="Typo.subtitle1" Class="font-bold">Correo</MudText>
-                            <MudText>@Result.Email</MudText>
+                            <MudText>@Data.Email</MudText>
                         </MudItem>
                     }
                 </MudGrid>
             </MudCardContent>
         </MudCard>
 
+        @* --- Bloque de datos de la transacción --- *@
         <MudCard Class="mt-3 shadow-sm">
             <MudCardContent Class="p-4">
                 <MudGrid Spacing="2">
-
-                    @if (TransactionDateTime != DateTime.MinValue)
-                    {
-                        <MudItem xs="12" sm="6">
-                            <MudText Typo="Typo.subtitle1" Class="font-bold">Fecha de Transacción</MudText>
-                            <MudText>@TransactionDateTime.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
-                        </MudItem>
-                    }
+                    <MudItem xs="12" sm="6">
+                        <MudText Typo="Typo.subtitle1" Class="font-bold">Fecha de Transacción</MudText>
+                        <MudText>@Data.FechaTransaccion.ToLocalTime().ToString("dd/MM/yyyy")</MudText>
+                    </MudItem>
 
                     <MudItem xs="12" sm="6">
                         <MudText Typo="Typo.subtitle1" Class="font-bold">Descripción</MudText>
-                        <MudText>@(Result.Description ?? "-")</MudText>
+                        <MudText>@(Data.Estado?.ToLowerInvariant() == "aprobado" ? "Transacción aprobada" : Data.Estado)</MudText>
                     </MudItem>
 
                     <MudItem xs="12" sm="6">
                         <MudText Typo="Typo.subtitle1" Class="font-bold">Autorización</MudText>
-                        <MudText>@(Result.Auth ?? "-")</MudText>
+                        <MudText>@(string.IsNullOrWhiteSpace(Data.NumeroAutorizacion) ? "-" : Data.NumeroAutorizacion)</MudText>
                     </MudItem>
 
                     <MudItem xs="12" sm="6">
                         <MudText Typo="Typo.subtitle1" Class="font-bold">Marca</MudText>
-                        <MudText>@FormatBrand(Result.Brand, Result.Last4)</MudText>
+                        <MudText>@(string.IsNullOrWhiteSpace(Data.MarcaTarjeta) ? "-" : Data.MarcaTarjeta)</MudText>
                     </MudItem>
 
                     <MudItem xs="12" sm="6">
                         <MudText Typo="Typo.subtitle1" Class="font-bold">Orden</MudText>
-                        <MudText>@(Result.Order ?? "-")</MudText>
+                        <MudText>@Data.NumeroOrden</MudText>
                     </MudItem>
 
-                    @if (!string.IsNullOrWhiteSpace(Result.TilopayTx))
+                    @if (!string.IsNullOrWhiteSpace(Data.TilopayTx))
                     {
                         <MudItem xs="12" sm="6">
                             <MudText Typo="Typo.subtitle1" Class="font-bold">Id Tilopay</MudText>
-                            <MudText>@Result.TilopayTx</MudText>
+                            <MudText>@Data.TilopayTx</MudText>
                         </MudItem>
                     }
                 </MudGrid>
             </MudCardContent>
         </MudCard>
 
-        @if (!string.IsNullOrWhiteSpace(Result.AmountLabel))
-        {
-            <div class="amount-center">
-                <MudText Typo="Typo.overline">MONTO CANCELADO</MudText>
-                <MudText Typo="Typo.h4" Class="mb-0">@Result.AmountLabel</MudText>
-                @if (!string.IsNullOrWhiteSpace(Result.Currency))
-                {
-                    <MudText Typo="Typo.caption" Class="mt-1">@Result.Currency</MudText>
-                }
-            </div>
-        }
+        <div class="amount-center">
+            <MudText Typo="Typo.overline">MONTO CANCELADO</MudText>
+            <MudText Typo="Typo.h4" Class="mb-0">@($"{Data.Monto:N2}")</MudText>
+            <MudText Typo="Typo.caption" Class="mt-1">@Data.Moneda</MudText>
+        </div>
 
         <div class="d-flex justify-center mt-4 mb-4">
             <MudButton Variant="Variant.Filled" Color="Color.Info" OnClick="VolverInicio">
@@ -116,7 +111,6 @@
         </div>
     }
 </MudContainer>
-
 
 <style>
     .banner {
@@ -132,7 +126,6 @@
     }
 
     .banner-warning {
-        background: #f59e0b;
         background: #f59e0b;
     }
 

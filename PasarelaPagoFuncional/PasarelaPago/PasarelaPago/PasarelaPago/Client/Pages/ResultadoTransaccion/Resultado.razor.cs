@@ -1,338 +1,141 @@
 ﻿using Microsoft.AspNetCore.Components;
+using MudBlazor;
 using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Web;
 using System.Net.Http;
 using System.Net.Http.Json;
 using System.Threading.Tasks;
-// Asegúrate de que estas referencias DTOs y Models existan en tu proyecto
-using PasarelaPago.Shared.Dtos;
-using PasarelaPago.Shared.Models;
 
 namespace PasarelaPago.Client.Pages.ResultadoTransaccion;
 
 public partial class Resultado : ComponentBase
 {
-    // INYECCIÓN DE DEPENDENCIAS
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private HttpClient Http { get; set; } = default!;
 
+    [Parameter] public string token { get; set; } = default!;
+
     public bool Loading { get; private set; } = true;
+    public string? Error { get; private set; }
+    public ResultadoPagoDto? Data { get; private set; }
 
-    // PROPIEDADES PARA LA FECHA DE LA TRANSACCIÓN
-    [Parameter]
-    [SupplyParameterFromQuery]
-    public string? Date { get; set; }
-
-    public DateTime TransactionDateTime { get; private set; } = DateTime.MinValue; // Se usará para mostrar y persistir
-
-    public PaymentResult Result { get; private set; } = new();
-    public string? PersistenciaEstado { get; private set; } // Estado de la operación de BD
-
-    // Banner UI
+    // Banner
     protected string BannerCss { get; private set; } = "banner-success";
-    protected string BannerIcon { get; private set; } = MudBlazor.Icons.Material.Filled.CheckCircle;
+    protected string BannerIcon { get; private set; } = Icons.Material.Filled.CheckCircle;
     protected string BannerText { get; private set; } = "¡Pago aprobado!";
 
-    // Lógica principal
     protected override async Task OnInitializedAsync()
     {
-        // 1. Leer los parámetros de la URL
-        ParseFromUrl();
-
-        // 2. Persistir el resultado en la BD
-        await PersistirResultadoAsync();
-
-        Loading = false;
-    }
-
-    private void ParseFromUrl()
-    {
-        var uri = new Uri(Nav.Uri);
-        var dict = ParseQuery(uri.Query);
-
-        // Datos core que envía Tilopay
-        dict.TryGetValue("code", out var code);
-        dict.TryGetValue("description", out var description);
-        dict.TryGetValue("auth", out var auth);
-        dict.TryGetValue("order", out var order);
-        dict.TryGetValue("brand", out var brand);
-        dict.TryGetValue("last-digits", out var last4);
-        dict.TryGetValue("tilopay-transaction", out var tilopayTx);
-        if (string.IsNullOrWhiteSpace(tilopayTx) && dict.TryGetValue("tpt", out var tpt))
-            tilopayTx = tpt;
-
-        // Monto / moneda
-        dict.TryGetValue("amount", out var amount);
-        dict.TryGetValue("currency", out var currency);
-
-        // Cliente
-        dict.TryGetValue("customer", out var customer);
-        dict.TryGetValue("email", out var email);
-        dict.TryGetValue("billToFirstName", out var firstName);
-        dict.TryGetValue("billToLastName", out var lastName);
-
-        // País y Cédula
-        dict.TryGetValue("billToCountry", out var country);
-        if (string.IsNullOrWhiteSpace(country) && dict.TryGetValue("country", out var c2)) country = c2;
-        dict.TryGetValue("customerId", out var idNumber);
-        if (string.IsNullOrWhiteSpace(idNumber) && dict.TryGetValue("cedula", out var c3)) idNumber = c3;
-        if (string.IsNullOrWhiteSpace(idNumber) && dict.TryGetValue("id", out var c4)) idNumber = c4;
-
-        // FECHA DE LA TRANSACCIÓN (LECTURA DEL NUEVO PARÁMETRO)
-        dict.TryGetValue("date", out var dateRaw);
-        // Usamos RoundtripKind para analizar el formato ISO 8601 (el 'o')
-        if (!string.IsNullOrWhiteSpace(dateRaw) && DateTime.TryParse(dateRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsedDate))
-        {
-            TransactionDateTime = parsedDate;
-        }
-
-        var displayCustomer = !string.IsNullOrWhiteSpace(customer)
-            ? customer
-            : $"{(firstName ?? "").Trim()} {(lastName ?? "").Trim()}".Trim();
-
-        // Usamos el código o el estado crudo para la BD
-        dict.TryGetValue("status", out var statusRaw);
-        if (string.IsNullOrWhiteSpace(statusRaw)) statusRaw = code;
-
-
-        Result = new PaymentResult
-        {
-            Code = code,
-            Description = description,
-            Auth = auth,
-            Order = order,
-            Brand = brand,
-            Last4 = last4,
-            TilopayTx = tilopayTx,
-            Amount = amount,
-            Currency = currency,
-            Customer = customer,
-            FirstName = firstName,
-            LastName = lastName,
-            DisplayCustomer = string.IsNullOrWhiteSpace(displayCustomer) ? null : displayCustomer,
-            Country = country,
-            IdNumber = idNumber,
-            Email = email,
-            StatusRaw = statusRaw, // Propiedad que usamos para la persistencia
-        };
-
-        // Lógica del Banner
-        var status = Classify(code, description);
-        switch (status)
-        {
-            case PaymentStatus.Success:
-                BannerCss = "banner-success";
-                BannerIcon = MudBlazor.Icons.Material.Filled.CheckCircle;
-                BannerText = "¡Pago aprobado!";
-                break;
-            case PaymentStatus.Pending:
-                BannerCss = "banner-warning";
-                BannerIcon = MudBlazor.Icons.Material.Filled.HourglassBottom;
-                BannerText = "Pago en proceso";
-                break;
-            default:
-                BannerCss = "banner-error";
-                BannerIcon = MudBlazor.Icons.Material.Filled.Error;
-                BannerText = "Pago rechazado";
-                break;
-        }
-    }
-
-    // --- MÉTODO PARA PERSISTIR EL RESULTADO EN LA BD ---
-    private async Task PersistirResultadoAsync()
-    {
-        // CORRECCIÓN: Usamos Order, TilopayTx o Auth como identificadores mínimos.
-        if (string.IsNullOrWhiteSpace(Result.Order) || (string.IsNullOrWhiteSpace(Result.TilopayTx) && string.IsNullOrWhiteSpace(Result.Auth)))
-        {
-            PersistenciaEstado = "No se requiere guardar (datos incompletos o transacción fallida/cancelada sin ID de Tilopay).";
-            return;
-        }
-
         try
         {
-            PersistenciaEstado = "Guardando resultado en la base de datos...";
-            StateHasChanged();
+            var currentUri = new Uri(Nav.Uri);
+            var qs = currentUri.Query;
 
-            // 1. Normalizar el estado
-            var estadoBD = NormalizarEstadoParaBD(Result.StatusRaw);
+            var apiUrl = string.IsNullOrEmpty(qs)
+                ? $"api/Transaccion/resultado/{token}"
+                : $"api/Transaccion/resultado/{token}{qs}";
 
-            // 2. Crear los modelos Cliente y Pago para enviar al API
-            var cliente = new Cliente
-            {
-                Cedula = (Result.IdNumber ?? "").Trim(),
-                Nombre = Result.FirstName ?? "",
-                Apellido = Result.LastName ?? "",
-                Correo = Result.Email,
-                Pais = Result.Country // Añadido para completar el modelo Cliente
-            };
-
-            var pago = new Pago
-            {
-                NumeroOrden = Result.Order!, // Sabemos que Order no es null por la validación
-                Cedula = (Result.IdNumber ?? "").Trim(),
-                MetodoPago = "payfac",
-                // El monto y moneda siempre son requeridos
-                Monto = decimal.TryParse(Result.Amount, NumberStyles.Any, CultureInfo.InvariantCulture, out var m) ? m : 0m,
-                Moneda = (Result.Currency ?? "USD").ToUpperInvariant(),
-                EstadoTilopay = estadoBD,
-                NumeroAutorizacion = Result.Auth,
-                // Guardamos los datos recibidos de la URL como un JSON simple
-                DatosRespuestaTilopay = $"{{ \"code\": \"{Result.Code}\", \"description\": \"{Result.Description}\", \"auth\": \"{Result.Auth}\", \"tx_id\": \"{Result.TilopayTx}\", \"order\": \"{Result.Order}\" }}",
-
-                // USAMOS LA FECHA PARSEADA DE LA URL. Si es DateTime.MinValue (fecha no recibida), usamos UtcNow.
-                FechaTransaccion = TransactionDateTime != DateTime.MinValue ? TransactionDateTime : DateTime.UtcNow,
-
-                MarcaTarjeta = (Result.Brand ?? "").ToLowerInvariant(),
-            };
-
-            var payload = new PagoConCliente { Cliente = cliente, Pago = pago };
-
-            // 3. Llamar a tu endpoint de servidor para guardar/actualizar
-            var resp = await Http.PostAsJsonAsync("api/Transaccion", payload);
+            var resp = await Http.GetAsync(apiUrl);
             if (!resp.IsSuccessStatusCode)
             {
-                var reason = $"{(int)resp.StatusCode} {resp.ReasonPhrase}";
-                throw new InvalidOperationException($"Error al guardar datos: {reason}");
+                var msg = await resp.Content.ReadAsStringAsync();
+                Error = $"No fue posible obtener el resultado ({(int)resp.StatusCode}): {msg}";
+                return;
             }
 
-            PersistenciaEstado = $"Transacción {Result.Order} guardada como '{estadoBD.ToUpper()}'.";
+            Data = await resp.Content.ReadFromJsonAsync<ResultadoPagoDto>();
+            if (Data is null)
+            {
+                Error = "No se encontró el resultado.";
+                return;
+            }
+
+            // Banner de estado
+            var s = (Data.Estado ?? "").Trim().ToLowerInvariant();
+            var aprobado = s is "aprobado" or "success" or "approved" or "1";
+            var pendiente = s is "pendiente" or "pending" or "review";
+
+            if (aprobado)
+            {
+                BannerCss = "banner-success";
+                BannerIcon = Icons.Material.Filled.CheckCircle;
+                BannerText = "¡Pago aprobado!";
+            }
+            else if (pendiente)
+            {
+                BannerCss = "banner-warning";
+                BannerIcon = Icons.Material.Filled.HourglassBottom;
+                BannerText = "Pago en proceso";
+            }
+            else
+            {
+                BannerCss = "banner-error";
+                BannerIcon = Icons.Material.Filled.Error;
+                BannerText = "Pago rechazado";
+            }
         }
-        catch (Exception ex)
+        catch (HttpRequestException ex)
         {
-            PersistenciaEstado = $"ERROR DE PERSISTENCIA: {ex.Message}";
+            Error = $"No fue posible obtener el resultado: {ex.Message}";
         }
         finally
         {
-            StateHasChanged();
+            Loading = false;
         }
-    }
-
-    // Función para clasificar el estado de Tilopay en un estado de BD simple
-    private static string NormalizarEstadoParaBD(string? statusRaw)
-    {
-        var s = (statusRaw ?? "").Trim().ToLowerInvariant();
-
-        // 1. El código '1' o la palabra 'success' o 'approved' indica éxito.
-        if (s == "1" || s == "success" || s == "approved")
-            return "aprobado";
-
-        // 2. Códigos de pendiente/revisión
-        if (s == "pending" || s == "review")
-            return "pendiente";
-
-        // El resto es considerado 'rechazado' (0, error, timeout, etc.)
-        return "rechazado";
-    }
-
-    // --- Métodos Auxiliares ---
-    private static Dictionary<string, string> ParseQuery(string? query)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        if (string.IsNullOrWhiteSpace(query)) return result;
-
-        var trimmed = query.StartsWith("?") ? query[1..] : query;
-        foreach (var part in trimmed.Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var kv = part.Split('=', 2);
-            var key = HttpUtility.UrlDecode(kv[0]) ?? "";
-            var val = kv.Length > 1 ? HttpUtility.UrlDecode(kv[1]) ?? "" : "";
-            result[key] = val;
-        }
-        return result;
-    }
-
-    private static PaymentStatus Classify(string? code, string? description)
-    {
-        var c = (code ?? "").Trim();
-        if (c == "1" || c.Equals("success", StringComparison.OrdinalIgnoreCase))
-            return PaymentStatus.Success;
-
-        if (c == "0" && description?.Contains("pend", StringComparison.OrdinalIgnoreCase) == true)
-            return PaymentStatus.Pending;
-
-        return PaymentStatus.Error;
     }
 
     protected void VolverInicio() => Nav.NavigateTo("/");
 
-    // FUNCIÓN PARA CONVERTIR CÓDIGOS DE PAÍS A NOMBRE COMPLETO
-    public static string GetCountryName(string? code)
+    protected static string FormatBrand(string? brand, string? masked)
     {
-        var c = (code ?? "").Trim().ToUpperInvariant();
+        var b = (brand ?? "").Trim();
+        if (!string.IsNullOrWhiteSpace(b))
+            b = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(b.ToLowerInvariant());
+
+        return string.IsNullOrWhiteSpace(masked)
+            ? (string.IsNullOrWhiteSpace(b) ? "-" : b)
+            : (string.IsNullOrWhiteSpace(b) ? masked : $"{b} — {masked}");
+    }
+
+    // 👇 NUEVO: ayuda a traducir códigos de país comunes
+    protected static string GetCountryName(string? codeOrName)
+    {
+        var s = (codeOrName ?? "").Trim();
+        if (string.IsNullOrWhiteSpace(s))
+            return "-";
+
+        var c = s.ToUpperInvariant();
+
+        // Mapeo explícito
         return c switch
         {
             "CR" => "Costa Rica",
-            "PA" => "Panamá",
             "CO" => "Colombia",
-            _ => c // Devuelve el código si no está listado, o el valor original si está vacío
+            "PA" => "Panamá",
+            _ => s.Length <= 3
+                    ? c                        // deja otros códigos tal cual (ej. US, MX)
+                    : CultureInfo.CurrentCulture.TextInfo.ToTitleCase(s.ToLowerInvariant()) // ya es nombre
         };
     }
 
-    protected static string FormatBrand(string? brand, string? last4)
+    // ✅ DTO completo con las propiedades del backend
+    public sealed class ResultadoPagoDto
     {
-        var b = (brand ?? "").Trim();
-        var mask = !string.IsNullOrWhiteSpace(last4) ? $"•••• •••• •••• {last4}" : "";
-        if (string.IsNullOrWhiteSpace(b))
-            return string.IsNullOrWhiteSpace(mask) ? "-" : mask;
+        public string NumeroOrden { get; set; } = default!;
+        public string? Cedula { get; set; }
+        public string? Estado { get; set; }
+        public decimal Monto { get; set; }
+        public string Moneda { get; set; } = "CRC";
+        public string? NumeroAutorizacion { get; set; }
+        public string? MarcaTarjeta { get; set; }
+        public DateTime FechaTransaccion { get; set; }
 
-        b = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(b.ToLowerInvariant());
-        return string.IsNullOrWhiteSpace(mask) ? b : $"{b} — {mask}";
-    }
-
-    // --- Definición de la Clase Resultado (Corregida de CS1061) ---
-    public sealed class PaymentResult
-    {
-        // tilopay
-        public string? Code { get; set; }
-        public string? Description { get; set; }
-        public string? Auth { get; set; }
-        public string? Order { get; set; }
-        public string? Brand { get; set; }
-        public string? Last4 { get; set; }
-        public string? TilopayTx { get; set; }
-        public string? StatusRaw { get; set; }
-
-        // monto
-        public string? Amount { get; set; }
-        public string? Currency { get; set; }
-
-        // cliente
-        public string? Customer { get; set; }
-        public string? FirstName { get; set; }
-        public string? LastName { get; set; }
+        // 👇 propiedades nuevas que el backend devuelve
+        public string? Nombre { get; set; }
+        public string? Apellido { get; set; }
         public string? DisplayCustomer { get; set; }
-        public string? Country { get; set; }
-        public string? IdNumber { get; set; }
         public string? Email { get; set; }
-
-        public string? AmountLabel =>
-            !string.IsNullOrWhiteSpace(Amount) && !string.IsNullOrWhiteSpace(Currency)
-              ? FormatAmount(Amount!, Currency!)
-              : null;
-
-        private static string FormatAmount(string raw, string currency)
-        {
-            if (decimal.TryParse(raw, NumberStyles.Any, CultureInfo.InvariantCulture, out var value))
-            {
-                var culture = currency.ToUpperInvariant() switch
-                {
-                    "CRC" => new CultureInfo("es-CR"),
-                    "USD" => new CultureInfo("en-US"),
-                    _ => CultureInfo.InvariantCulture
-                };
-                var symbol = currency.ToUpperInvariant() switch
-                {
-                    "CRC" => "₡",
-                    "USD" => "$",
-                    _ => currency.ToUpperInvariant() + " "
-                };
-                return symbol + value.ToString("N2", culture);
-            }
-            return $"{currency} {raw}";
-        }
+        public string? Pais { get; set; }
+        public string? TilopayTx { get; set; }
     }
-
-    private enum PaymentStatus { Success, Pending, Error }
 }
