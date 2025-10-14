@@ -19,7 +19,6 @@ public partial class Resultado : ComponentBase
     public string? Error { get; private set; }
     public ResultadoPagoDto? Data { get; private set; }
 
-    // Banner
     protected string BannerCss { get; private set; } = "banner-success";
     protected string BannerIcon { get; private set; } = Icons.Material.Filled.CheckCircle;
     protected string BannerText { get; private set; } = "¡Pago aprobado!";
@@ -50,7 +49,6 @@ public partial class Resultado : ComponentBase
                 return;
             }
 
-            // Banner de estado
             var s = (Data.Estado ?? "").Trim().ToLowerInvariant();
             var aprobado = s is "aprobado" or "success" or "approved" or "1";
             var pendiente = s is "pendiente" or "pending" or "review";
@@ -97,7 +95,6 @@ public partial class Resultado : ComponentBase
             : (string.IsNullOrWhiteSpace(b) ? masked : $"{b} — {masked}");
     }
 
-    // 👇 NUEVO: ayuda a traducir códigos de país comunes
     protected static string GetCountryName(string? codeOrName)
     {
         var s = (codeOrName ?? "").Trim();
@@ -106,19 +103,17 @@ public partial class Resultado : ComponentBase
 
         var c = s.ToUpperInvariant();
 
-        // Mapeo explícito
         return c switch
         {
             "CR" => "Costa Rica",
             "CO" => "Colombia",
             "PA" => "Panamá",
             _ => s.Length <= 3
-                    ? c                        // deja otros códigos tal cual (ej. US, MX)
-                    : CultureInfo.CurrentCulture.TextInfo.ToTitleCase(s.ToLowerInvariant()) // ya es nombre
+                    ? c                        
+                    : CultureInfo.CurrentCulture.TextInfo.ToTitleCase(s.ToLowerInvariant()) 
         };
     }
 
-    // ✅ DTO completo con las propiedades del backend
     public sealed class ResultadoPagoDto
     {
         public string NumeroOrden { get; set; } = default!;
@@ -129,8 +124,6 @@ public partial class Resultado : ComponentBase
         public string? NumeroAutorizacion { get; set; }
         public string? MarcaTarjeta { get; set; }
         public DateTime FechaTransaccion { get; set; }
-
-        // 👇 propiedades nuevas que el backend devuelve
         public string? Nombre { get; set; }
         public string? Apellido { get; set; }
         public string? DisplayCustomer { get; set; }

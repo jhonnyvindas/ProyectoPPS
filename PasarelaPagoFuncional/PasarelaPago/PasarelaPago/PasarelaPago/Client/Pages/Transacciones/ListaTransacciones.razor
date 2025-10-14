@@ -62,28 +62,62 @@
 
             <GridFilterSettings Type="Syncfusion.Blazor.Grids.FilterType.Excel" />
 
-            <!-- 🔧 Evita ambigüedad con MudBlazor -->
             <GridSelectionSettings Type="Syncfusion.Blazor.Grids.SelectionType.Single"
                                    Mode="Syncfusion.Blazor.Grids.SelectionMode.Row"
                                    PersistSelection="true" />
 
             <GridPageSettings PageSize="10" />
 
-            <!-- Solo dejamos el ToolbarClick; removemos ExcelQueryCellInfoEvent -->
             <GridEvents TValue="DTOTransacciones"
                         OnToolbarClick="ToolbarClick" />
 
             <GridColumns>
                 <GridColumn Field=@nameof(DTOTransacciones.cedula) HeaderText="Cédula" Type="ColumnType.String" Width="120" />
                 <GridColumn Field=@nameof(DTOTransacciones.nombreCliente) HeaderText="Nombre" Type="ColumnType.String" Width="180" />
-                <GridColumn Field=@nameof(DTOTransacciones.pais) HeaderText="País" Type="ColumnType.String" Width="120" />
-                <GridColumn Field=@nameof(DTOTransacciones.moneda) HeaderText="Moneda" Type="ColumnType.String" Width="100" />
-                <!-- ✅ El formato via atributo funciona también para el Excel export -->
+                <GridColumn Field=@nameof(DTOTransacciones.pais) HeaderText="País" Type="ColumnType.String" Width="120">
+                    <Template>
+                        @{
+                            var transaccion = context as DTOTransacciones;
+                            @ToCountryName(transaccion?.pais)
+                        }
+                    </Template>
+                </GridColumn>
+                <GridColumn Field=@nameof(DTOTransacciones.moneda) HeaderText="Moneda" Type="ColumnType.String" Width="100">
+                    <Template>
+                        @{
+                            var transaccion = context as DTOTransacciones;
+                            @ToCurrencyName(transaccion?.moneda)
+                        }
+                    </Template>
+                </GridColumn>
                 <GridColumn Field=@nameof(DTOTransacciones.monto) HeaderText="Monto" Type="ColumnType.Number" Width="120" Format="#,##0.00" TextAlign="TextAlign.Right" />
                 <GridColumn Field=@nameof(DTOTransacciones.numeroOrden) HeaderText="# Orden" Type="ColumnType.String" Width="150" />
                 <GridColumn Field=@nameof(DTOTransacciones.fechaTransaccion) HeaderText="Fecha" Type="ColumnType.DateTime" Width="150" Format="dd/MM/yyyy HH:mm" />
-                <GridColumn Field=@nameof(DTOTransacciones.estadoTransaccion) HeaderText="Estado" Type="ColumnType.String" Width="120" />
+                <GridColumn Field=@nameof(DTOTransacciones.estadoTransaccion) HeaderText="Estado" Type="ColumnType.String" Width="120">
+                    <Template>
+                        @{
+                            var transaccion = context as DTOTransacciones;
+                            var estado = ToCapitalizedStatus(transaccion?.estadoTransaccion);
+                            var claseCss = GetStatusCssClass(estado);
+
+                            <span class="@claseCss">@estado</span>
+                        }
+                    </Template>
+                </GridColumn>
             </GridColumns>
         </SfGrid>
     </MudItem>
 </MudGrid>
+
+
+ <style>
+    .estado-aprobado {
+        color: #198754; 
+        font-weight: bold;
+    }
+
+    .estado-rechazado {
+        color: #dc3545; 
+        font-weight: bold;
+    }
+ </style>

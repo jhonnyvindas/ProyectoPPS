@@ -270,7 +270,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             Estado = "Obteniendo token…";
             StateHasChanged();
 
-            // 1) Token del SDK de Tilopay
             var sdkToken = await Api.GetSdkTokenAsync();
             if (string.IsNullOrWhiteSpace(sdkToken))
             {
@@ -278,7 +277,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 return;
             }
 
-            // 2) Asegurar método de pago Payfac
             if (string.IsNullOrWhiteSpace(SelectedPaymentMethod) || !IsPayfac)
             {
                 try
@@ -296,19 +294,15 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 return;
             }
 
-            // 3) Generar nuevo número de orden
             _orderNumber = Guid.NewGuid().ToString("N");
             StateHasChanged();
 
-            // 4) PREPARAR ORDEN en tu API (UPSERT de Cliente y Pago)  ✅
             var preparar = new
             {
                 NumeroOrden = _orderNumber,
                 Cedula = CustomerId!,
                 Monto = Amount,
                 Moneda = Currency,
-
-                // 👉 Estos campos permiten que luego aparezcan en Resultado (nombre/correo/país)
                 Nombre = BillToFirstName,
                 Apellido = BillToLastName,
                 Email = BillToEmail,
@@ -327,10 +321,8 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             Estado = "Inicializando SDK…";
             StateHasChanged();
 
-            // 5) Redirección SOLO con el token (sin query propios) ✅
             var redirectUrl = BuildRedirectUrl($"/pagos/resultado/{prep.Token}");
 
-            // 6) Opciones del SDK (datos sensibles NO van en la URL) ✅
             var options = new
             {
                 orderNumber = _orderNumber,
@@ -389,15 +381,11 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         }
     }
 
-
-
-
     public sealed class PaymentEvent
     {
         public string? status { get; set; }
         public object? payload { get; set; }
     }
-
 
     [JSInvokable]
     public async Task OnPaymentEvent(PaymentEvent evt)
@@ -458,7 +446,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     [JSInvokable]
     public async Task OnPaymentTimeout()
     {
-        // Lógica de retardo forzado (MIN WAIT TIME)
         if (_paymentStartTime.HasValue)
         {
             var elapsed = DateTime.UtcNow - _paymentStartTime.Value;
@@ -466,7 +453,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
             if (remainingDelay.TotalMilliseconds > 0)
             {
-                // Espera el tiempo restante para cumplir el mínimo de 5 segundos de espera
                 await Task.Delay(remainingDelay);
             }
         }

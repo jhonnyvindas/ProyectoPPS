@@ -1,18 +1,14 @@
-﻿// PasarelaPago.Client/Pages/DashboardPagos/Transacciones.razor.cs
-using System;
-using System.Collections.Generic;
-using System.Globalization;
-using System.Linq;
-using System.Net.Http;
+﻿using System.Globalization;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
 using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
 using PasarelaPago.Shared.Dtos;
-
-// Syncfusion
 using Syncfusion.Blazor.Grids;
 using Syncfusion.Blazor.Navigations;
+
+
+
+
 
 namespace PasarelaPago.Client.Pages.DashboardPagos
 {
@@ -21,7 +17,6 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
         [Inject] public HttpClient Http { get; set; } = default!;
         [Inject] public IJSRuntime JSRuntime { get; set; } = default!;
 
-        // Referencia al grid
         protected SfGrid<DTOTransacciones> GridTransacciones { get; set; } = default!;
 
         public string SearchString { get; set; } = string.Empty;
@@ -85,14 +80,11 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
             return amount.ToString("N2", CultureInfo.InvariantCulture);
         }
 
-        // -------------------------------------------------------
-        // Ciclo de vida y carga de datos
-        // -------------------------------------------------------
         protected override async Task OnInitializedAsync() => await CargarDashboard();
 
         public async Task CargarDashboard()
         {
-            await CargarDatos(1, 1000); // página 1, tamaño grande
+            await CargarDatos(1, 1000); 
         }
 
         private async Task CargarDatos(int pagina, int tamanio)
@@ -134,12 +126,8 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
             }
         }
 
-        // -------------------------------------------------------
-        // Exportación a Excel integrada de Syncfusion
-        // -------------------------------------------------------
         protected async Task ToolbarClick(ClickEventArgs args)
         {
-            // El ID del botón es <IDGRID>_excelexport; verifica que coincida con tu ID del grid
             if (args.Item.Id?.Contains("GridTransacciones_excelexport", StringComparison.OrdinalIgnoreCase) == true
                 || string.Equals(args.Item.Text, "ExcelExport", StringComparison.OrdinalIgnoreCase))
             {
@@ -157,7 +145,6 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
                                 Index = 1,
                                 Cells = new List<ExcelCell>
                                 {
-                                    // Estilo básico (evitamos tipos que varían por versión)
                                     new ExcelCell
                                     {
                                         ColSpan = 8,
@@ -180,9 +167,6 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
             }
         }
 
-        // -------------------------------------------------------
-        // Auxiliares
-        // -------------------------------------------------------
         private static string BuildQuery(IDictionary<string, string?> query)
         {
             var parts = query
@@ -193,7 +177,6 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
             return parts.Length > 0 ? "?" + string.Join("&", parts) : string.Empty;
         }
 
-        // Mantengo por si lo usas en otras vistas (no se usa en SfGrid directamente)
         public bool QuickFilter(DTOTransacciones element)
         {
             if (string.IsNullOrWhiteSpace(SearchString))
@@ -208,15 +191,86 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
                    (element.estadoTransaccion?.Contains(s, StringComparison.OrdinalIgnoreCase) == true) ||
                    (element.moneda?.Contains(s, StringComparison.OrdinalIgnoreCase) == true);
         }
-
-        private static string NormalizeStatus(string? v)
+    
+        protected static string ToCapitalizedStatus(string? estado)
         {
-            var s = (v ?? "").Trim().ToLowerInvariant();
-            if (s is "success" or "approved" or "aprobado" or "captured" or "completed" or "paid")
-                return "aprobado";
-            if (s is "failed" or "rechazado" or "declined" or "canceled" or "cancelled" or "error")
-                return "rechazado";
-            return s;
+            if (string.IsNullOrWhiteSpace(estado)) return string.Empty;
+
+            var trimmed = estado.Trim().ToLowerInvariant();
+
+            if (trimmed.Length == 0) return string.Empty;
+
+            return char.ToUpperInvariant(trimmed[0]) + trimmed.Substring(1);
         }
+        protected static string GetStatusCssClass(string? estadoCapitalizado)
+        {
+            if (string.IsNullOrWhiteSpace(estadoCapitalizado)) return string.Empty;
+
+            var estado = estadoCapitalizado.Trim().ToLowerInvariant();
+
+            return estado switch
+            {
+                "aprobado" => "estado-aprobado",
+                "rechazado" => "estado-rechazado",
+                _ => string.Empty, 
+            };
+        }
+
+        private void ExcelQueryCellInfo(ExcelQueryCellInfoEventArgs<DTOTransacciones> args)
+        {
+            if (args.Data is null || args.Column is null) return;
+
+            // País (CR -> Costa Rica)
+            if (args.Column.Field == nameof(DTOTransacciones.pais))
+            {
+                args.Cell.Value = ToCountryName(args.Data.pais);
+                return;
+            }
+
+            // Moneda (CRC -> Colones)
+            if (args.Column.Field == nameof(DTOTransacciones.moneda))
+            {
+                args.Cell.Value = ToCurrencyName(args.Data.moneda);
+                return;
+            }
+
+            // Monto como número con formato (sin alinear)
+            if (args.Column.Field == nameof(DTOTransacciones.monto))
+            {
+                args.Cell.Value = Convert.ToDouble(args.Data.monto);
+                if (args.Style != null)
+                {
+                    args.Style.NumberFormat = "#,##0.00"; // CellStyle sí soporta NumberFormat
+                }
+                return;
+            }
+
+            // Fecha con el mismo formato visual de la tabla
+            if (args.Column.Field == nameof(DTOTransacciones.fechaTransaccion))
+            {
+                args.Cell.Value = args.Data.fechaTransaccion?.ToString("dd/MM/yyyy HH:mm");
+                return;
+            }
+
+            // Estado con color (verde/rojo) y negrita
+            if (args.Column.Field == nameof(DTOTransacciones.estadoTransaccion))
+            {
+                var estado = ToCapitalizedStatus(args.Data.estadoTransaccion); // “Aprobado”/“Rechazado”
+                args.Cell.Value = estado;
+
+                if (args.Style != null)
+                {
+                    args.Style.Bold = true;
+                    args.Style.FontColor = estado.Equals("Aprobado", StringComparison.OrdinalIgnoreCase)
+                        ? "#198754"   // verde
+                        : estado.Equals("Rechazado", StringComparison.OrdinalIgnoreCase)
+                            ? "#dc3545" // rojo
+                            : "#000000";
+                }
+                return;
+            }
+        }
+
     }
 }
+
