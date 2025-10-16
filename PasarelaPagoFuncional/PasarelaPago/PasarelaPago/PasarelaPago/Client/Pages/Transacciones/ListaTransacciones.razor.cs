@@ -216,6 +216,41 @@ namespace PasarelaPago.Client.Pages.DashboardPagos
             };
         }
 
+        public void ExcelQueryCellInfoHandler(ExcelQueryCellInfoEventArgs<DTOTransacciones> args)
+        {
+            if (args.Data is null || args.Column is null) return;
+            var col = args.Column.HeaderText;
+
+            if (args.Column.HeaderText == "Estado")
+            {
+                if (args.Cell.Value.ToString().Equals("aprobado"))
+                {
+                    args.Cell.CellStyle.FontColor = "#69bb19"; 
+                }
+                else if (args.Cell.Value.ToString().Equals("rechazado"))
+                {
+                    args.Cell.CellStyle.FontColor = "#dc143c"; 
+                }
+            }
+
+            // País (CR -> Costa Rica)
+            if (args.Column.Field == nameof(DTOTransacciones.pais))
+            {
+                args.Cell.Value = ToCountryName(args.Data.pais);
+                return;
+            }
+
+            // Moneda (CRC -> Colones)
+            if (args.Column.Field == nameof(DTOTransacciones.moneda))
+            {
+                args.Cell.Value = ToCurrencyName(args.Data.moneda);
+                return;
+            }
+
+
+        }
+
+
         private void ExcelQueryCellInfo(ExcelQueryCellInfoEventArgs<DTOTransacciones> args)
         {
             if (args.Data is null || args.Column is null) return;

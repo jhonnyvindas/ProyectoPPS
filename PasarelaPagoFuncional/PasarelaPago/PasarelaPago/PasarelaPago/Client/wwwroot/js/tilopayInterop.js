@@ -4,6 +4,7 @@
     let _dotnetRef = null;
     let _lastInitResult = null;
     let _watchdog = null;
+    let _redirectMode = false; 
 
     function require(cond, msg) { if (!cond) throw new Error(msg); }
 
@@ -38,12 +39,12 @@
             console.warn("[tilopayInterop] cancel() falló/ausente:", e);
         }
         try {
-            document.querySelectorAll(".tilopay-modal,.tlpy-modal,.tilopay-overlay,iframe[src*='tilopay']")
+            document
+                .querySelectorAll(".tilopay-modal,.tlpy-modal,.tilopay-overlay,iframe[src*='tilopay']")
                 .forEach(n => n.remove());
         } catch { }
     }
 
-    // ---------- Helper: solo tarjeta (payfac) ----------
     function pickPayfac(methods) {
         if (!Array.isArray(methods) || methods.length === 0) return null;
 
@@ -62,25 +63,42 @@
         return null;
     }
 
-    // ---------- Helper: normalizar estado de pago ----------
-    function normalizePaymentStatus(result) {
-        let s = (result?.status ?? result?.result ?? result?.message ?? "")
-            .toString()
-            .toLowerCase();
-
-        const approvedFlag = result?.approved === true || result?.authorization === "approved";
-
-        if (approvedFlag || ["approved", "success", "ok", "paid", "completed", "authorized"].includes(s))
-            return "approved";
-
-        if (["denied", "declined", "rejected", "failed", "error", "cancelled", "canceled", "void", "refused"].includes(s))
-            return "rejected";
-
-        if (s === "timeout") return "timeout";
-        return "unknown"; // nunca asumimos success
+    function detectInlineFieldErrors() {
+        const sel = [
+            ".error", ".validation", ".field-validation-error",
+            "[id*='cvv'][class*='invalid']", "[id*='expiry'][class*='invalid']",
+            "[id*='cc_number'][class*='invalid']"
+        ].join(",");
+        const nodes = Array.from(document.querySelectorAll(sel));
+        const texts = nodes.map(n => (n.innerText || n.textContent || "").trim().toLowerCase()).filter(Boolean);
+        const hit = texts.find(t =>
+            t.includes("cvv") || t.includes("cvc") ||
+            t.includes("no válido") || t.includes("invalido") ||
+            t.includes("tarjeta") || t.includes("vencid")
+        );
+        return hit || null;
     }
 
-    // ------------------ INIT UNA SOLA VEZ ------------------
+    function normalizePaymentStatus(result) {
+        const s = (result?.status ?? result?.result ?? result?.message ?? "").toString().toLowerCase();
+        const approvedFlag = result?.approved === true || (result?.authorization || "").toString().toLowerCase() === "approved";
+
+        if (result && (result.redirect === true || result.redirectUrl || result.redirect_url)) return "approved";
+
+        if (approvedFlag || ["approved", "success", "ok", "paid", "completed", "authorized"].includes(s)) return "approved";
+        if (["denied", "declined", "rejected", "failed", "error", "cancelled", "canceled", "void", "refused"].includes(s)) return "rejected";
+        if (s === "timeout") return "timeout";
+        return "unknown";
+    }
+
+    function isEmptyResult(r) {
+        if (!r) return true;
+        const keys = Object.keys(r);
+        if (keys.length === 0) return true;
+        if (keys.length === 1 && keys[0] === "message" && (r.message ?? "") === "") return true;
+        return false;
+    }
+
     async function ensureInit(token, options, dotnetRef) {
         ensureSdk();
         require(!!token, "Token vacío para Init");
@@ -88,6 +106,8 @@
         ensureResponseContainer();
 
         if (dotnetRef) _dotnetRef = dotnetRef;
+
+        _redirectMode = !!(options && options.redirect);
 
         if (_inited) {
             if (options && typeof window.Tilopay?.updateOptions === "function") {
@@ -104,7 +124,7 @@
                 if (_dotnetRef && payfac) {
                     await _dotnetRef.invokeMethodAsync('OnDefaultMethod', payfac);
                 } else {
-                    console.warn("[tilopayInterop] No hay método :payfac: disponible para esta moneda (update).");
+                    console.warn("[tilopayInterop] No hay método :payfac: disponible (update).");
                 }
             } catch { }
 
@@ -131,7 +151,7 @@
             if (_dotnetRef && payfac) {
                 await _dotnetRef.invokeMethodAsync('OnDefaultMethod', payfac);
             } else {
-                console.warn("[tilopayInterop] No hay método :payfac: disponible para esta moneda (init).");
+                console.warn("[tilopayInterop] No hay método :payfac: disponible (init).");
             }
         } catch { }
 
@@ -161,8 +181,7 @@
     async function getCardType() {
         try {
             ensureSdk();
-            if (typeof window.Tilopay.getCardType !== "function")
-                return "";
+            if (typeof window.Tilopay.getCardType !== "function") return "";
             const r = await window.Tilopay.getCardType();
             return (r?.message || r || "").toString().toLowerCase();
         } catch {
@@ -220,7 +239,6 @@
         }
     }
 
-    // ------------------ PAY ------------------
     async function prepareAndPay() {
         ensureSdk();
         require(_inited, "SDK no inicializado; llama a ensureInit primero.");
@@ -283,7 +301,8 @@
         try { location.reload(); } catch { }
     }
 
-    async function prepareAndPayWithTimeout(timeoutMs = 7000) {
+    // --- con timeout y manejo de redirect vacío ---
+    async function prepareAndPayWithTimeout(timeoutMs = 15000) {
         ensureSdk();
         require(_inited, "SDK no inicializado; llama a ensureInit primero.");
         ensureDom();
@@ -304,6 +323,7 @@
 
         try {
             console.log("[tilopayInterop] startPayment() con timeout =", timeoutMs, "ms");
+            startWatchdog(timeoutMs + 5000);
 
             const result = await Promise.race([
                 window.Tilopay.startPayment(),
@@ -311,23 +331,46 @@
             ]);
 
             clearTimeout(timeoutId);
+            clearWatchdog();
 
-            console.log("[tilopayInterop] resultado:", result);
+            // >>> CLAVE: si hay redirect y el resultado está vacío, NO notificar a .NET
+            if (_redirectMode && isEmptyResult(result)) {
+                console.log("[tilopayInterop] redirect in progress; skipping OnPaymentEvent for empty result");
+                return result;
+            }
+
+            let status = normalizePaymentStatus(result);
+
+            if (status === "unknown") {
+                await new Promise(r => setTimeout(r, 500));
+                const inlineErr = detectInlineFieldErrors();
+                if (inlineErr) {
+                    status = "rejected";
+                    if (result && typeof result === "object") {
+                        result.inlineError = inlineErr;
+                    }
+                }
+            }
+
+            console.log("[tilopayInterop] RAW result:", result);
+            console.log("[tilopayInterop] normalized status:", status);
+
             if (_dotnetRef) {
-                const status = normalizePaymentStatus(result);
                 await _dotnetRef.invokeMethodAsync("OnPaymentEvent", { status, payload: result });
             }
             return result;
         } catch (err) {
+            clearTimeout(timeoutId);
+            clearWatchdog();
+
             if (err === timeoutErr) {
-                console.warn("[tilopayInterop] TIMEOUT: sin respuesta del SDK dentro del tiempo");
+                console.warn("[tilopayInterop] TIMEOUT sin respuesta");
                 try { if (_dotnetRef) await _dotnetRef.invokeMethodAsync("OnPaymentTimeout"); } catch { }
                 return { status: "timeout" };
             }
             console.error("[tilopayInterop] error en startPayment:", err);
             throw err;
         } finally {
-            clearTimeout(timeoutId);
             _busy = false;
         }
     }
@@ -343,6 +386,7 @@
         hardReload,
         clearWatchdog,
         startWatchdog,
-        prepareAndPayWithTimeout
+        prepareAndPayWithTimeout,
+        maybeCancel
     };
 })();

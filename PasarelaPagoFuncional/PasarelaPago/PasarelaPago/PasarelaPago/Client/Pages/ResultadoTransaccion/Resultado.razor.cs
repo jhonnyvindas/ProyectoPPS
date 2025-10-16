@@ -13,7 +13,7 @@ public partial class Resultado : ComponentBase
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private HttpClient Http { get; set; } = default!;
 
-    [Parameter] public string token { get; set; } = default!;
+    [Parameter] public string? token { get; set; }
 
     public bool Loading { get; private set; } = true;
     public string? Error { get; private set; }
@@ -27,14 +27,25 @@ public partial class Resultado : ComponentBase
     {
         try
         {
-            var currentUri = new Uri(Nav.Uri);
-            var qs = currentUri.Query;
+            // 1) Debe venir el token en la ruta
+            if (string.IsNullOrWhiteSpace(token))
+            {
+                Error = "Faltan parámetros de resultado.";
+                return;
+            }
+
+            // 2) Arma la URL al API incluyendo el querystring si existe
+            var uri = new Uri(Nav.Uri);
+            var qs = uri.Query; // incluye el "?" si hay parámetros
 
             var apiUrl = string.IsNullOrEmpty(qs)
                 ? $"api/Transaccion/resultado/{token}"
                 : $"api/Transaccion/resultado/{token}{qs}";
 
+            // 3) Llama al API
             var resp = await Http.GetAsync(apiUrl);
+
+            // Si el servidor no responde 2xx, muestra el texto devuelto (evita deserializar HTML)
             if (!resp.IsSuccessStatusCode)
             {
                 var msg = await resp.Content.ReadAsStringAsync();
@@ -42,6 +53,16 @@ public partial class Resultado : ComponentBase
                 return;
             }
 
+            // 4) Asegura que el contenido sea JSON antes de deserializar
+            var media = resp.Content.Headers.ContentType?.MediaType?.ToLowerInvariant();
+            if (media is not ("application/json" or "text/json" or "application/problem+json"))
+            {
+                var raw = await resp.Content.ReadAsStringAsync();
+                Error = $"El servidor no devolvió JSON válido.\nTipo: {media ?? "(desconocido)"}\nContenido: {raw}";
+                return;
+            }
+
+            // 5) Lee el DTO
             Data = await resp.Content.ReadFromJsonAsync<ResultadoPagoDto>();
             if (Data is null)
             {
@@ -49,6 +70,7 @@ public partial class Resultado : ComponentBase
                 return;
             }
 
+            // 6) Configura banner según estado
             var s = (Data.Estado ?? "").Trim().ToLowerInvariant();
             var aprobado = s is "aprobado" or "success" or "approved" or "1";
             var pendiente = s is "pendiente" or "pending" or "review";
@@ -81,6 +103,7 @@ public partial class Resultado : ComponentBase
             Loading = false;
         }
     }
+
 
     protected void VolverInicio() => Nav.NavigateTo("/");
 

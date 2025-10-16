@@ -50,6 +50,8 @@
                 ShowColumnChooser="true"
                 Toolbar="@( new List<string>() { "ExcelExport", "ColumnChooser", "Search" })">
 
+                
+
             <GridSearchSettings Fields="@(new string[] {
                                             nameof(DTOTransacciones.cedula),
                                             nameof(DTOTransacciones.nombreCliente),
@@ -69,7 +71,8 @@
             <GridPageSettings PageSize="10" />
 
             <GridEvents TValue="DTOTransacciones"
-                        OnToolbarClick="ToolbarClick" />
+                        OnToolbarClick="ToolbarClick" 
+                        ExcelQueryCellInfoEvent="ExcelQueryCellInfoHandler" />
 
             <GridColumns>
                 <GridColumn Field=@nameof(DTOTransacciones.cedula) HeaderText="Cédula" Type="ColumnType.String" Width="120" />

@@ -1,14 +1,16 @@
 ﻿using Microsoft.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Newtonsoft.Json.Linq;
 using PasarelaPago.Client.Services;
 using PasarelaPago.Shared.Dtos;
 using PasarelaPago.Shared.Models;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Net.Http.Json;
-using System.Text.Json;
 using System.Net.Http;
-using System.Collections.Generic;
+using System.Net.Http.Json;
+using System.Runtime.Intrinsics.X86;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace PasarelaPago.Client.Pages.PagosTilopay;
@@ -20,19 +22,12 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     [Inject] protected NavigationManager Nav { get; set; } = default!;
     [Inject] protected HttpClient Http { get; set; } = default!;
 
-    // --- Configuración de Retardo para UI (5 Segundos) ---
     private readonly TimeSpan _minWaitTime = TimeSpan.FromSeconds(5);
-    // ---------------------------------------------------
-
     public string? SelectedPaymentMethod { get; set; } = null;
     public bool IsPayfac => (SelectedPaymentMethod?.Contains(":payfac:", StringComparison.OrdinalIgnoreCase) ?? false);
-
-    // Tarjeta (UI)
     public string? CardNumber { get; set; } = "4012000000020089";
     public string? Expiry { get; set; } = "12/26";
     public string? CVV { get; set; } = "123";
-
-    // Datos del comprador
     public bool OwnerReadOnly { get; } = false;
     public string? BillToFirstName { get; set; } = "Demo";
     public string? BillToLastName { get; set; } = "User";
@@ -44,8 +39,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     public string? BillToCity { get; set; } = "San José";
     public string? BillToState { get; set; } = "SJ";
     public string? BillToAddress { get; set; } = "123 Main Street";
-
-    // Marca de tarjeta
     public string? CardBrand { get; set; }
     public int CvvMaxLen => CardBrand == "amex" ? 4 : 3;
     public int CardNumberMaxLen => CardBrand == "amex" ? 15 : 19;
@@ -63,7 +56,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     private string _orderNumber = Guid.NewGuid().ToString("N");
     public string OrderNumber => _orderNumber;
 
-    // Monto
     public decimal Amount { get; set; } = 10000m;
     public string Currency { get; set; } = "CRC";
     public string AmountString => Amount.ToString("F2", CultureInfo.InvariantCulture);
@@ -74,11 +66,9 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     private DotNetObjectReference<PagoTilopay>? _selfRef;
 
-    // Modal de error/timeout
     private bool ShowFailModal { get; set; } = false;
     private string? FailReason { get; set; }
 
-    // Almacena el tiempo en que se hizo clic en pagar (para calcular el retardo)
     private DateTime? _paymentStartTime;
 
     public string PayLabel => FormatPayLabel(Amount, Currency);
@@ -95,7 +85,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         return symbol + amount.ToString("N2", culture);
     }
 
-    // Attrs UI
     public IReadOnlyDictionary<string, object> CustomerIdInputAttrs => new Dictionary<string, object>
     {
         ["id"] = "customerId",
@@ -148,7 +137,6 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                     description = "preinit",
                     language = "es",
                     capture = "1",
-                    redirect = BuildRedirectUrl("/pagos/resultado"),
                 };
 
                 await JS.InvokeVoidAsync("tilopayInterop.ensureInit", token, preOptions, _selfRef);
@@ -170,7 +158,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     private string BuildRedirectUrl(string path, IDictionary<string, string?>? query)
     {
         var uri = new Uri(Nav.Uri);
-        var scheme = "https";
+        var scheme = uri.Scheme;                     
         var host = uri.Host;
         var port = uri.IsDefaultPort ? "" : $":{uri.Port}";
         var baseUrl = $"{scheme}://{host}{port}{path}";
@@ -179,15 +167,12 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         var parts = new List<string>(query.Count);
         foreach (var kv in query)
         {
-            if (string.IsNullOrWhiteSpace(kv.Key)) continue;
-            if (string.IsNullOrWhiteSpace(kv.Value)) continue;
+            if (string.IsNullOrWhiteSpace(kv.Key) || string.IsNullOrWhiteSpace(kv.Value)) continue;
             parts.Add($"{Uri.EscapeDataString(kv.Key)}={Uri.EscapeDataString(kv.Value!)}");
         }
-        var qs = string.Join("&", parts);
-        return parts.Count > 0 ? $"{baseUrl}?{qs}" : baseUrl;
+        return parts.Count > 0 ? $"{baseUrl}?{string.Join("&", parts)}" : baseUrl;
     }
 
-    // Validaciones
     public string? ValidateExpiry(string? v)
     {
         if (string.IsNullOrWhiteSpace(v)) return "Fecha requerida";
@@ -226,9 +211,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
     };
 
     private string ToInvariantAmount(decimal amount) => amount.ToString("F2", CultureInfo.InvariantCulture);
-    private string MetodoPagoParaBD() => "payfac";
 
-    // Helpers modal/recarga (manual con botón OK)
     private async Task Reload()
     {
         try { await JS.InvokeVoidAsync("tilopayInterop.hardReload"); }
@@ -252,9 +235,13 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         public string Token { get; set; } = default!;
         public DateTime ExpiraUtc { get; set; }
     }
+
+    private string? _redirectUrlForPrep;
+
     public async Task Pagar()
     {
         if (Pagando) return;
+
         _paymentStartTime = DateTime.UtcNow;
         Pagando = true;
         ShowFailModal = false;
@@ -264,6 +251,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             if (string.IsNullOrWhiteSpace(CustomerId))
             {
                 Estado = "Debe indicar la cédula del cliente.";
+                Pagando = false; StateHasChanged();
                 return;
             }
 
@@ -274,6 +262,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             if (string.IsNullOrWhiteSpace(sdkToken))
             {
                 Estado = "No se obtuvo token del servidor.";
+                Pagando = false; StateHasChanged();
                 return;
             }
 
@@ -282,15 +271,14 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 try
                 {
                     var payfac = await JS.InvokeAsync<string>("tilopayInterop.getPayfacMethod");
-                    if (!string.IsNullOrWhiteSpace(payfac))
-                        SelectedPaymentMethod = payfac;
+                    if (!string.IsNullOrWhiteSpace(payfac)) SelectedPaymentMethod = payfac;
                 }
                 catch { }
             }
-
             if (string.IsNullOrWhiteSpace(SelectedPaymentMethod) || !IsPayfac)
             {
                 Estado = "No hay método de tarjeta disponible para la moneda seleccionada.";
+                Pagando = false; StateHasChanged();
                 return;
             }
 
@@ -315,13 +303,16 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             if (prep is null || string.IsNullOrWhiteSpace(prep.Token))
             {
                 Estado = "No fue posible preparar la orden.";
+                Pagando = false; StateHasChanged();
                 return;
             }
 
+            _redirectUrlForPrep = $"/pagos/resultado/{prep.Token}";
+
+            var redirectUrl = BuildRedirectUrl(_redirectUrlForPrep);
+
             Estado = "Inicializando SDK…";
             StateHasChanged();
-
-            var redirectUrl = BuildRedirectUrl($"/pagos/resultado/{prep.Token}");
 
             var options = new
             {
@@ -331,7 +322,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 description = "Pago de servicios",
                 language = "es",
                 capture = "1",
-                redirect = redirectUrl,
+                redirect = redirectUrl,            
                 billToEmail = BillToEmail,
                 billToFirstName = BillToFirstName,
                 billToLastName = BillToLastName,
@@ -362,22 +353,25 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             Estado = "Esperando confirmación del banco…";
             StateHasChanged();
 
-            await JS.InvokeVoidAsync("tilopayInterop.prepareAndPayWithTimeout", 120000);
+            await JS.InvokeVoidAsync("tilopayInterop.prepareAndPayWithTimeout", 60000);
         }
         catch (JSException jse)
         {
             Estado = $"Error JS/SDK: {jse.Message}";
             ShowFailure("Ocurrió un problema con el SDK. Intente nuevamente.");
+            Pagando = false; StateHasChanged();
+        }
+        catch (HttpRequestException hre)
+        {
+            Estado = $"Error de red/HTTP: {hre.Message}";
+            ShowFailure("No se pudo comunicar con el servidor. Intente nuevamente.");
+            Pagando = false; StateHasChanged();
         }
         catch (Exception ex)
         {
             Estado = $"Error: {ex.Message}";
             ShowFailure("Ocurrió un problema inesperado. Intente nuevamente.");
-        }
-        finally
-        {
-            Pagando = false;
-            StateHasChanged();
+            Pagando = false; StateHasChanged();
         }
     }
 
@@ -386,66 +380,88 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         public string? status { get; set; }
         public object? payload { get; set; }
     }
+    private static bool EsValidacionInline(string payload)
+    {
+        if (string.IsNullOrWhiteSpace(payload)) return false;
+
+        if (payload.Contains("\"inlineError\"", StringComparison.OrdinalIgnoreCase)) return true;
+
+        return
+            payload.Contains("cvv", StringComparison.OrdinalIgnoreCase) ||
+            payload.Contains("cvc", StringComparison.OrdinalIgnoreCase) ||
+            payload.Contains("número de tarjeta", StringComparison.OrdinalIgnoreCase) ||
+            payload.Contains("numero de tarjeta", StringComparison.OrdinalIgnoreCase) ||
+            payload.Contains("tarjeta vencida", StringComparison.OrdinalIgnoreCase) ||
+            payload.Contains("invalid", StringComparison.OrdinalIgnoreCase) ||
+            payload.Contains("invalido", StringComparison.OrdinalIgnoreCase) ||
+            payload.Contains("inválido", StringComparison.OrdinalIgnoreCase);
+    }
 
     [JSInvokable]
     public async Task OnPaymentEvent(PaymentEvent evt)
     {
         var status = (evt?.status ?? "").ToLowerInvariant();
+        var payload = evt?.payload?.ToString() ?? "";
 
-        try
+        Console.WriteLine($"OnPaymentEvent: status={status}, payload={payload}");
+
+        if (EsValidacionInline(payload))
         {
-            if (status == "approved")
-            {
-            }
-            else
-            {
-                var payloadString = evt?.payload?.ToString() ?? status;
-
-                bool isCardValidationError = payloadString.Contains("número de tarjeta inválido", StringComparison.OrdinalIgnoreCase) ||
-                                             payloadString.Contains("tarjeta vencida", StringComparison.OrdinalIgnoreCase) ||
-                                             payloadString.Contains("CVV", StringComparison.OrdinalIgnoreCase) ||
-                                             payloadString.Contains("número de tarjeta válido", StringComparison.OrdinalIgnoreCase) || 
-                                             payloadString.Contains("Card not allowed", StringComparison.OrdinalIgnoreCase); 
-
-                string failReasonMessage;
-
-                if (isCardValidationError)
-                {
-                    failReasonMessage = "Por favor verifique los datos de la tarjeta.";
-
-                    Estado = $"Pago rechazado: Error de datos de tarjeta.";
-                }
-                else
-                {
-                    failReasonMessage = "La transacción no pudo ser efectuada. Intente nuevamente.";
-
-                    Estado = $"Pago rechazado o no confirmado ({status}): {payloadString}";
-                }
-
-                if (_paymentStartTime.HasValue)
-                {
-                    var elapsed = DateTime.UtcNow - _paymentStartTime.Value;
-                    var remainingDelay = _minWaitTime - elapsed;
-
-                    if (remainingDelay.TotalMilliseconds > 0)
-                    {
-                        await Task.Delay(remainingDelay);
-                    }
-                }
-
-                ShowFailure(failReasonMessage); 
-            }
-        }
-        catch (Exception ex)
-        {
+            try { await JS.InvokeVoidAsync("tilopayInterop.maybeCancel"); } catch { }
+            Estado = "Revise los datos de la tarjeta.";
+            await AplicarRetardoUX();
+            ShowFailure("CVV/fecha/número inválido. Corrija e intente de nuevo.");
+            Pagando = false;
+            StateHasChanged();
+            return;
         }
 
-        StateHasChanged();
+        if (status == "approved" || status == "rejected")
+        {
+            try { await JS.InvokeVoidAsync("tilopayInterop.maybeCancel"); } catch { }
+            if (!string.IsNullOrWhiteSpace(_redirectUrlForPrep))
+                Nav.NavigateTo(_redirectUrlForPrep!, forceLoad: true);
+            return;
+        }
+
+        if (status is "timeout" or "failed" or "error" or "cancelled" or "canceled" or "void")
+        {
+            Estado = "No fue posible completar la transacción.";
+            await AplicarRetardoUX();
+            ShowFailure("Ocurrió un problema. Intente nuevamente.");
+            Pagando = false;
+            StateHasChanged();
+            return;
+        }
+
+        var trimmed = (payload ?? "").Trim();
+        bool emptyPayload = string.IsNullOrEmpty(trimmed) || trimmed == "{\"message\":\"\"}" || trimmed == "{}";
+        if (emptyPayload)
+        {
+            return;
+        }
+
+        try { await JS.InvokeVoidAsync("tilopayInterop.maybeCancel"); } catch { }
+        if (!string.IsNullOrWhiteSpace(_redirectUrlForPrep))
+            Nav.NavigateTo(_redirectUrlForPrep!, forceLoad: true);
+    }
+
+    private async Task AplicarRetardoUX()
+    {
+        if (_paymentStartTime.HasValue)
+        {
+            var elapsed = DateTime.UtcNow - _paymentStartTime.Value;
+            var remaining = _minWaitTime - elapsed;
+            if (remaining.TotalMilliseconds > 0)
+                await Task.Delay(remaining);
+        }
     }
 
     [JSInvokable]
     public async Task OnPaymentTimeout()
     {
+        Pagando = false;
+
         if (_paymentStartTime.HasValue)
         {
             var elapsed = DateTime.UtcNow - _paymentStartTime.Value;
@@ -457,7 +473,10 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
             }
         }
 
+        Estado = "Tiempo de espera agotado.";
         ShowFailure("Tiempo de espera agotado. No fue posible completar la transacción.");
+
+        StateHasChanged();
     }
 
     [JSInvokable]
