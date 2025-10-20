@@ -223,11 +223,15 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         ShowFailModal = true;
         StateHasChanged();
     }
-    private async Task OnFailOk()
+    private Task OnFailOk()
     {
-        ShowFailModal = false;
+        ShowFailModal = false;   
+        FailReason = null;
+        Pagando = false;
+        Estado = null;
+
         StateHasChanged();
-        await Reload();
+        return Task.CompletedTask;
     }
 
     private sealed class PrepararOrdenResponse
