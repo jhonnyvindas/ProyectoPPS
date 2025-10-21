@@ -13,90 +13,57 @@ public partial class Resultado : ComponentBase
     [Inject] private NavigationManager Nav { get; set; } = default!;
     [Inject] private HttpClient Http { get; set; } = default!;
 
+    // 2) Parámetro de ruta
     [Parameter] public string? token { get; set; }
 
-    public bool Loading { get; private set; } = true;
-    public string? Error { get; private set; }
-    public ResultadoPagoDto? Data { get; private set; }
+    // 3) Estado de pantalla
+    public bool Loading { get; set; } = true;
+    public string? Error { get; set; }
+    private ResultadoPagoDto? Data { get; set; }
 
-    protected string BannerCss { get; private set; } = "banner-success";
-    protected string BannerIcon { get; private set; } = Icons.Material.Filled.CheckCircle;
-    protected string BannerText { get; private set; } = "¡Pago aprobado!";
+    // 4) Banner
+    public string BannerCss { get; set; } = "banner-warning";
+    public string BannerIcon { get; set; } = MudBlazor.Icons.Material.Filled.Info;
+    public string BannerText { get; set; } = "Procesando respuesta…";
 
     protected override async Task OnInitializedAsync()
     {
+        // A) Quitar la query string de la barra (oculta code, description, brand, etc.)
+        var uri = new Uri(Nav.Uri);
+        if (!string.IsNullOrEmpty(uri.Query))
+        {
+            var clean = uri.GetLeftPart(UriPartial.Path);
+            Nav.NavigateTo(clean, replace: true); // actualiza URL sin recargar
+        }
+
+        // B) Validar que tenemos token en la ruta
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            Error = "Token no provisto en la ruta.";
+            Loading = false;
+            return;
+        }
+
+        // C) Cargar DTO por token (tu endpoint ya normaliza y persiste el estado)
         try
         {
-            // 1) Debe venir el token en la ruta
-            if (string.IsNullOrWhiteSpace(token))
+            var dto = await Http.GetFromJsonAsync<ResultadoPagoDto>($"api/Transaccion/resultado/{token}");
+            if (dto is null)
             {
-                Error = "Faltan parámetros de resultado.";
+                Error = "No se pudo obtener el resultado de la transacción.";
                 return;
             }
 
-            // 2) Arma la URL al API incluyendo el querystring si existe
-            var uri = new Uri(Nav.Uri);
-            var qs = uri.Query; // incluye el "?" si hay parámetros
+            Data = dto;
+            SetBannerFromEstado(dto.Estado);
 
-            var apiUrl = string.IsNullOrEmpty(qs)
-                ? $"api/Transaccion/resultado/{token}"
-                : $"api/Transaccion/resultado/{token}{qs}";
-
-            // 3) Llama al API
-            var resp = await Http.GetAsync(apiUrl);
-
-            // Si el servidor no responde 2xx, muestra el texto devuelto (evita deserializar HTML)
-            if (!resp.IsSuccessStatusCode)
-            {
-                var msg = await resp.Content.ReadAsStringAsync();
-                Error = $"No fue posible obtener el resultado ({(int)resp.StatusCode}): {msg}";
-                return;
-            }
-
-            // 4) Asegura que el contenido sea JSON antes de deserializar
-            var media = resp.Content.Headers.ContentType?.MediaType?.ToLowerInvariant();
-            if (media is not ("application/json" or "text/json" or "application/problem+json"))
-            {
-                var raw = await resp.Content.ReadAsStringAsync();
-                Error = $"El servidor no devolvió JSON válido.\nTipo: {media ?? "(desconocido)"}\nContenido: {raw}";
-                return;
-            }
-
-            // 5) Lee el DTO
-            Data = await resp.Content.ReadFromJsonAsync<ResultadoPagoDto>();
-            if (Data is null)
-            {
-                Error = "No se encontró el resultado.";
-                return;
-            }
-
-            // 6) Configura banner según estado
-            var s = (Data.Estado ?? "").Trim().ToLowerInvariant();
-            var aprobado = s is "aprobado" or "success" or "approved" or "1";
-            var pendiente = s is "pendiente" or "pending" or "review";
-
-            if (aprobado)
-            {
-                BannerCss = "banner-success";
-                BannerIcon = Icons.Material.Filled.CheckCircle;
-                BannerText = "¡Pago aprobado!";
-            }
-            else if (pendiente)
-            {
-                BannerCss = "banner-warning";
-                BannerIcon = Icons.Material.Filled.HourglassBottom;
-                BannerText = "Pago en proceso";
-            }
-            else
-            {
-                BannerCss = "banner-error";
-                BannerIcon = Icons.Material.Filled.Error;
-                BannerText = "Pago rechazado";
-            }
+            // D) (Opcional) Redirigir a URL limpio por número de orden
+            // Si quieres permanecer en esta vista, comenta esta línea:
+            // Nav.NavigateTo($"/pagos/orden/{dto.NumeroOrden}", replace: true);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex)
         {
-            Error = $"No fue posible obtener el resultado: {ex.Message}";
+            Error = $"Error al consultar el resultado: {ex.Message}";
         }
         finally
         {
@@ -104,40 +71,46 @@ public partial class Resultado : ComponentBase
         }
     }
 
-
-    protected void VolverInicio() => Nav.NavigateTo("/");
-
-    protected static string FormatBrand(string? brand, string? masked)
+    private void SetBannerFromEstado(string? estado)
     {
-        var b = (brand ?? "").Trim();
-        if (!string.IsNullOrWhiteSpace(b))
-            b = CultureInfo.CurrentCulture.TextInfo.ToTitleCase(b.ToLowerInvariant());
-
-        return string.IsNullOrWhiteSpace(masked)
-            ? (string.IsNullOrWhiteSpace(b) ? "-" : b)
-            : (string.IsNullOrWhiteSpace(b) ? masked : $"{b} — {masked}");
+        var e = (estado ?? "").Trim().ToLowerInvariant();
+        if (e == "aprobado")
+        {
+            BannerCss = "banner-success";
+            BannerIcon = MudBlazor.Icons.Material.Filled.CheckCircle;
+            BannerText = "Transacción aprobada";
+        }
+        else if (e == "pendiente")
+        {
+            BannerCss = "banner-warning";
+            BannerIcon = MudBlazor.Icons.Material.Filled.Schedule;
+            BannerText = "Transacción en revisión";
+        }
+        else
+        {
+            BannerCss = "banner-error";
+            BannerIcon = MudBlazor.Icons.Material.Filled.Error;
+            BannerText = "Transacción rechazada";
+        }
+        // Forzar re-render del banner ya calculado
+        StateHasChanged();
     }
 
-    protected static string GetCountryName(string? codeOrName)
-    {
-        var s = (codeOrName ?? "").Trim();
-        if (string.IsNullOrWhiteSpace(s))
-            return "-";
+    // Botón “Volver al inicio”
+    private void VolverInicio() => Nav.NavigateTo("/");
 
-        var c = s.ToUpperInvariant();
-
-        return c switch
+    // País a nombre legible (puedes ampliar este mapa)
+    private static string GetCountryName(string? code)
+        => (code ?? "").Trim().ToUpperInvariant() switch
         {
             "CR" => "Costa Rica",
             "CO" => "Colombia",
             "PA" => "Panamá",
-            _ => s.Length <= 3
-                    ? c                        
-                    : CultureInfo.CurrentCulture.TextInfo.ToTitleCase(s.ToLowerInvariant()) 
+            _ => code ?? "-"
         };
-    }
 
-    public sealed class ResultadoPagoDto
+    // DTO mínimo para esta vista (coincide con tu controlador)
+    private sealed class ResultadoPagoDto
     {
         public string NumeroOrden { get; set; } = default!;
         public string? Cedula { get; set; }

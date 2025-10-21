@@ -169,6 +169,7 @@ namespace PasarelaPago.Server.Controllers
         [HttpGet("resultado/{token}")]
         public async Task<ActionResult<ResultadoPagoDto>> ResultadoPorToken(string token)
         {
+            // 1) Resolver número de orden por token o fallback 'order'
             if (!_tokens.TryGet(token, out var numeroOrden))
             {
                 var order = HttpContext.Request.Query["order"].ToString();
@@ -183,10 +184,12 @@ namespace PasarelaPago.Server.Controllers
                 }
             }
 
+            // 2) Cargar pago desde BD
             var pago = await _context.Pagos.FirstOrDefaultAsync(p => p.NumeroOrden == numeroOrden);
             if (pago is null)
                 return NotFound($"Orden '{numeroOrden}' no encontrada en BD.");
 
+            // 3) Leer query params (si es que vienen)
             var qs = HttpContext.Request.Query;
 
             string code = qs["code"].ToString();
@@ -199,30 +202,52 @@ namespace PasarelaPago.Server.Controllers
             if (string.IsNullOrWhiteSpace(tpt))
                 tpt = qs["tpt"].ToString();
 
+            // 4) Detectar si realmente llegaron datos de Tilopay en esta llamada
+            bool tieneInfoTilopay = !string.IsNullOrWhiteSpace(code)
+                                 || !string.IsNullOrWhiteSpace(status)
+                                 || !string.IsNullOrWhiteSpace(description)
+                                 || !string.IsNullOrWhiteSpace(auth)
+                                 || !string.IsNullOrWhiteSpace(brand)
+                                 || !string.IsNullOrWhiteSpace(tpt);
+
+            // 5) Normalización de estado (solo si llegaron params)
             static string NormalizarEstado(string codeVal, string statusVal, string descVal)
             {
                 var s = (statusVal ?? "").Trim().ToLowerInvariant();
                 var c = (codeVal ?? "").Trim().ToLowerInvariant();
 
-                if (c == "1" || s == "success" || s == "approved") return "aprobado";
-                if (s == "pending" || s == "review" || descVal?.Contains("pend", StringComparison.OrdinalIgnoreCase) == true)
+                // más completo para casos aprobados
+                if (c == "1" || s == "success" || s == "approved" || s == "captured" || s == "completed" || s == "paid" ||
+                    (descVal?.IndexOf("aprob", StringComparison.OrdinalIgnoreCase) >= 0))
+                    return "aprobado";
+
+                // pendientes/revisión
+                if (s == "pending" || s == "review" ||
+                    (descVal?.IndexOf("pend", StringComparison.OrdinalIgnoreCase) >= 0))
                     return "pendiente";
 
+                // por defecto: rechazado
                 return "rechazado";
             }
 
-            var estado = NormalizarEstado(code, status, description);
+            // 6) Persistir SOLO si esta llamada vino con información de Tilopay.
+            if (tieneInfoTilopay)
+            {
+                var estado = NormalizarEstado(code, status, description);
 
-            pago.EstadoTilopay = estado;
-            if (!string.IsNullOrWhiteSpace(auth)) pago.NumeroAutorizacion = auth;
-            if (!string.IsNullOrWhiteSpace(brand)) pago.MarcaTarjeta = brand;
-            if (pago.FechaTransaccion == default) pago.FechaTransaccion = DateTime.UtcNow;
+                pago.EstadoTilopay = estado;
+                if (!string.IsNullOrWhiteSpace(auth)) pago.NumeroAutorizacion = auth;
+                if (!string.IsNullOrWhiteSpace(brand)) pago.MarcaTarjeta = brand;
+                if (pago.FechaTransaccion == default) pago.FechaTransaccion = DateTime.UtcNow;
 
-            pago.DatosRespuestaTilopay =
-                $"{{\"code\":\"{code}\",\"status\":\"{status}\",\"description\":\"{description}\",\"auth\":\"{auth}\",\"tx_id\":\"{tpt}\",\"order\":\"{numeroOrden}\"}}";
+                pago.DatosRespuestaTilopay =
+                    $"{{\"code\":\"{code}\",\"status\":\"{status}\",\"description\":\"{description}\",\"auth\":\"{auth}\",\"tx_id\":\"{tpt}\",\"order\":\"{numeroOrden}\"}}";
 
-            await _context.SaveChangesAsync();
+                await _context.SaveChangesAsync();
+            }
+            // Si NO llegaron params, no tocamos nada: devolvemos lo que ya está en BD.
 
+            // 7) Armar DTO para la respuesta (tomando lo que quedó en BD)
             Cliente? cliente = null;
             if (!string.IsNullOrWhiteSpace(pago.Cedula))
                 cliente = await _context.Clientes.AsNoTracking().FirstOrDefaultAsync(c => c.Cedula == pago.Cedula);
@@ -241,7 +266,7 @@ namespace PasarelaPago.Server.Controllers
                 NumeroAutorizacion = pago.NumeroAutorizacion,
                 MarcaTarjeta = pago.MarcaTarjeta,
                 FechaTransaccion = pago.FechaTransaccion,
-                TilopayTx = tpt,
+                TilopayTx = string.IsNullOrWhiteSpace(tpt) ? null : tpt, // si no vino en esta llamada, lo dejamos null
                 Nombre = cliente?.Nombre,
                 Apellido = cliente?.Apellido,
                 DisplayCustomer = display,
@@ -251,6 +276,7 @@ namespace PasarelaPago.Server.Controllers
 
             return Ok(dto);
         }
+
 
         public class PagoConCliente
         {
@@ -368,5 +394,113 @@ namespace PasarelaPago.Server.Controllers
                 return BadRequest(ex.Message);
             }
         }
+
+
+
+
+
+
+
+
+
+
+
+
+        [HttpGet("callback/{token}")]
+        public async Task<IActionResult> Callback(string token)
+        {
+            // 1) Resolver numeroOrden por token o fallback 'order'
+            if (!_tokens.TryGet(token, out var numeroOrden))
+            {
+                var order = HttpContext.Request.Query["order"].ToString();
+                if (string.IsNullOrWhiteSpace(order))
+                    return NotFound("Token inválido o expirado.");
+                numeroOrden = order;
+            }
+
+            // 2) Tomar QS y persistir estado
+            var qs = HttpContext.Request.Query;
+            string code = qs["code"].ToString();
+            string status = qs["status"].ToString();
+            string description = qs["description"].ToString();
+            string auth = qs["auth"].ToString();
+            string brand = qs["brand"].ToString();
+            string tpt = string.IsNullOrWhiteSpace(qs["tilopay-transaction"])
+                ? qs["tpt"].ToString()
+                : qs["tilopay-transaction"].ToString();
+
+            var pago = await _context.Pagos.FirstOrDefaultAsync(p => p.NumeroOrden == numeroOrden);
+            if (pago is null) return NotFound($"Orden '{numeroOrden}' no encontrada.");
+
+            static string NormalizarEstado(string c, string s, string d)
+            {
+                s = (s ?? "").Trim().ToLowerInvariant();
+                c = (c ?? "").Trim().ToLowerInvariant();
+
+                // ✅ Aprobado (más robusto)
+                if (c == "1" || s == "success" || s == "approved" || s == "captured" || s == "completed" || s == "paid" ||
+                    d?.Contains("aprob", StringComparison.OrdinalIgnoreCase) == true)
+                    return "aprobado";
+
+                // ⏳ Pendiente
+                if (s == "pending" || s == "review" ||
+                    d?.Contains("pend", StringComparison.OrdinalIgnoreCase) == true)
+                    return "pendiente";
+
+                // ❌ Rechazado por defecto
+                return "rechazado";
+            }
+
+            var estado = NormalizarEstado(code, status, description);
+            pago.EstadoTilopay = estado;
+            if (!string.IsNullOrWhiteSpace(auth)) pago.NumeroAutorizacion = auth;
+            if (!string.IsNullOrWhiteSpace(brand)) pago.MarcaTarjeta = brand;
+            if (pago.FechaTransaccion == default) pago.FechaTransaccion = DateTime.UtcNow;
+
+            pago.DatosRespuestaTilopay =
+                $"{{\"code\":\"{code}\",\"status\":\"{status}\",\"description\":\"{description}\",\"auth\":\"{auth}\",\"tx_id\":\"{tpt}\",\"order\":\"{numeroOrden}\"}}";
+
+            await _context.SaveChangesAsync();
+
+            // 3) Redirigir a página FINAL limpia (sin token ni query)
+            return Redirect($"/pagos/resultado/{token}");
+        }
+
+        [HttpGet("por-orden/{order}")]
+        public async Task<ActionResult<ResultadoPagoDto>> ObtenerPorOrden(string order)
+        {
+            var pago = await _context.Pagos.FirstOrDefaultAsync(p => p.NumeroOrden == order);
+            if (pago is null) return NotFound($"Orden '{order}' no encontrada.");
+
+            Cliente? cliente = null;
+            if (!string.IsNullOrWhiteSpace(pago.Cedula))
+                cliente = await _context.Clientes.AsNoTracking().FirstOrDefaultAsync(c => c.Cedula == pago.Cedula);
+
+            string? display = cliente is null
+                ? null
+                : $"{(cliente.Nombre ?? "").Trim()} {(cliente.Apellido ?? "").Trim()}".Trim();
+
+            var dto = new ResultadoPagoDto
+            {
+                NumeroOrden = pago.NumeroOrden,
+                Cedula = pago.Cedula,
+                Estado = pago.EstadoTilopay ?? "desconocido",
+                Monto = pago.Monto,
+                Moneda = pago.Moneda,
+                NumeroAutorizacion = pago.NumeroAutorizacion,
+                MarcaTarjeta = pago.MarcaTarjeta,
+                FechaTransaccion = pago.FechaTransaccion,
+                TilopayTx = null,
+                Nombre = cliente?.Nombre,
+                Apellido = cliente?.Apellido,
+                DisplayCustomer = display,
+                Email = cliente?.Correo,
+                Pais = cliente?.Pais
+            };
+
+            return Ok(dto);
+        }
+
+
     }
 }

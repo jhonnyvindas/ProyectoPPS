@@ -311,7 +311,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
                 return;
             }
 
-            _redirectUrlForPrep = $"/pagos/resultado/{prep.Token}";
+            _redirectUrlForPrep = $"/api/Transaccion/callback/{prep.Token}";
 
             var redirectUrl = BuildRedirectUrl(_redirectUrlForPrep);
 
