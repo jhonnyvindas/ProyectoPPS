@@ -7,9 +7,6 @@ using Syncfusion.Blazor.Grids;
 using Syncfusion.Blazor.Navigations;
 
 
-
-
-
 namespace PasarelaPago.Client.Pages.DashboardPagos
 {
     public partial class DashboardPagos : ComponentBase

@@ -266,7 +266,7 @@ namespace PasarelaPago.Server.Controllers
                 NumeroAutorizacion = pago.NumeroAutorizacion,
                 MarcaTarjeta = pago.MarcaTarjeta,
                 FechaTransaccion = pago.FechaTransaccion,
-                TilopayTx = string.IsNullOrWhiteSpace(tpt) ? null : tpt, // si no vino en esta llamada, lo dejamos null
+                TilopayTx = string.IsNullOrWhiteSpace(tpt) ? null : tpt,
                 Nombre = cliente?.Nombre,
                 Apellido = cliente?.Apellido,
                 DisplayCustomer = display,
@@ -395,17 +395,6 @@ namespace PasarelaPago.Server.Controllers
             }
         }
 
-
-
-
-
-
-
-
-
-
-
-
         [HttpGet("callback/{token}")]
         public async Task<IActionResult> Callback(string token)
         {
@@ -437,17 +426,14 @@ namespace PasarelaPago.Server.Controllers
                 s = (s ?? "").Trim().ToLowerInvariant();
                 c = (c ?? "").Trim().ToLowerInvariant();
 
-                // ✅ Aprobado (más robusto)
                 if (c == "1" || s == "success" || s == "approved" || s == "captured" || s == "completed" || s == "paid" ||
                     d?.Contains("aprob", StringComparison.OrdinalIgnoreCase) == true)
                     return "aprobado";
 
-                // ⏳ Pendiente
                 if (s == "pending" || s == "review" ||
                     d?.Contains("pend", StringComparison.OrdinalIgnoreCase) == true)
                     return "pendiente";
 
-                // ❌ Rechazado por defecto
                 return "rechazado";
             }
 
@@ -462,7 +448,6 @@ namespace PasarelaPago.Server.Controllers
 
             await _context.SaveChangesAsync();
 
-            // 3) Redirigir a página FINAL limpia (sin token ni query)
             return Redirect($"/pagos/resultado/{token}");
         }
 
@@ -500,7 +485,6 @@ namespace PasarelaPago.Server.Controllers
 
             return Ok(dto);
         }
-
 
     }
 }

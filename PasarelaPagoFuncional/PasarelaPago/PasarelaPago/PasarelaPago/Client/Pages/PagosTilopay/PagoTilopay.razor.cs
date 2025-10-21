@@ -114,11 +114,16 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
 
     protected override void OnInitialized()
     {
-        _selfRef = DotNetObjectReference.Create(this);
+        //_selfRef = DotNetObjectReference.Create(this);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender)
+        {
+            _selfRef = DotNetObjectReference.Create(this);
+        }
+
         if (!firstRender) return;
 
         if (_selfRef is null)
@@ -153,6 +158,7 @@ public partial class PagoTilopay : ComponentBase, IAsyncDisposable
         _selfRef?.Dispose();
         await Task.CompletedTask;
     }
+
 
     private string BuildRedirectUrl(string path) => BuildRedirectUrl(path, null);
     private string BuildRedirectUrl(string path, IDictionary<string, string?>? query)

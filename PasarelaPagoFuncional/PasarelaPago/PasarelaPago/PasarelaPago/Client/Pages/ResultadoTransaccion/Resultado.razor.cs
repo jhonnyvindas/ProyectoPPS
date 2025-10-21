@@ -10,7 +10,7 @@ namespace PasarelaPago.Client.Pages.ResultadoTransaccion;
 
 public partial class Resultado : ComponentBase
 {
-    [Inject] private NavigationManager Nav { get; set; } = default!;
+    [Inject] NavigationManager Nav { get; set; }
     [Inject] private HttpClient Http { get; set; } = default!;
 
     // 2) Parámetro de ruta
@@ -97,7 +97,19 @@ public partial class Resultado : ComponentBase
     }
 
     // Botón “Volver al inicio”
-    private void VolverInicio() => Nav.NavigateTo("/");
+    private void VolverInicio()
+    { 
+        try{
+        Nav.NavigateTo("/pagos/tilopay", forceLoad: true);
+        
+        }
+        catch(Exception ex){
+            var a = ex; 
+        }
+    }
+
+
+
 
     // País a nombre legible (puedes ampliar este mapa)
     private static string GetCountryName(string? code)
